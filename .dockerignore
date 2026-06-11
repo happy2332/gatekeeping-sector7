@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+gatekeeping.db
+gatekeeping.db-journal
+.DS_Store
+.git/
+.gitignore
+render.yaml
+run_*tests.py
