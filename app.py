@@ -81,6 +81,18 @@ def filter_as_time12(value):
     return dt.strftime("%I:%M %p").lstrip("0")
 
 
+@app.context_processor
+def inject_phone_helper():
+    def phone_visible(house):
+        # house may be a sqlite3.Row or dict-like
+        try:
+            masked = house["phone_masked"]
+        except (KeyError, IndexError):
+            masked = 0
+        return not masked or role_at_least("guard")
+    return {"phone_visible": phone_visible}
+
+
 def get_db():
     if "db" not in g:
         g.db = sqlite3.connect(DB_PATH)
@@ -105,7 +117,8 @@ def init_db():
             number TEXT NOT NULL,
             owner_name TEXT,
             phone TEXT,
-            floor TEXT
+            floor TEXT,
+            phone_masked INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS vehicles (
@@ -138,6 +151,8 @@ def init_db():
     cols = {row[1] for row in db.execute("PRAGMA table_info(houses)").fetchall()}
     if "floor" not in cols:
         db.execute("ALTER TABLE houses ADD COLUMN floor TEXT")
+    if "phone_masked" not in cols:
+        db.execute("ALTER TABLE houses ADD COLUMN phone_masked INTEGER NOT NULL DEFAULT 0")
 
     # Migration: drop legacy UNIQUE constraint on houses.number so the same
     # number can appear once per floor. We replace it with two partial indexes.
@@ -301,11 +316,12 @@ def house_detail(house_id):
             else:
                 try:
                     db.execute(
-                        "UPDATE houses SET owner_name = ?, phone = ?, floor = ? WHERE id = ?",
+                        "UPDATE houses SET owner_name = ?, phone = ?, floor = ?, phone_masked = ? WHERE id = ?",
                         (
                             request.form.get("owner_name", "").strip() or None,
                             request.form.get("phone", "").strip() or None,
                             new_floor,
+                            1 if request.form.get("phone_masked") else 0,
                             house_id,
                         ),
                     )
@@ -343,12 +359,13 @@ def house_create():
 
     try:
         cur = db.execute(
-            "INSERT INTO houses (number, owner_name, phone, floor) VALUES (?, ?, ?, ?)",
+            "INSERT INTO houses (number, owner_name, phone, floor, phone_masked) VALUES (?, ?, ?, ?, ?)",
             (
                 number,
                 request.form.get("owner_name", "").strip() or None,
                 request.form.get("phone", "").strip() or None,
                 floor,
+                1 if request.form.get("phone_masked") else 0,
             ),
         )
         db.commit()

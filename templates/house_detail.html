@@ -8,8 +8,11 @@
     <dt>Owner</dt><dd>{{ house.owner_name or '—' }}</dd>
     <dt>Phone</dt>
     <dd>
-      {% if house.phone %}
+      {% if house.phone and phone_visible(house) %}
         <a href="tel:{{ house.phone | replace(' ', '') }}">{{ house.phone }}</a>
+        {% if house.phone_masked %}<span class="muted" style="font-size:.8rem"> · hidden from residents</span>{% endif %}
+      {% elif house.phone %}
+        <span class="muted">hidden</span>
       {% else %}
         <span class="muted">—</span>
       {% endif %}
@@ -33,6 +36,10 @@
     <label class="field">
       <span>Phone</span>
       <input name="phone" placeholder="Phone" value="{{ house.phone or '' }}" inputmode="tel">
+    </label>
+    <label class="checkbox">
+      <input type="checkbox" name="phone_masked" value="1" {% if house.phone_masked %}checked{% endif %}>
+      <span>Hide phone from residents <em>(only admin and guard can see it)</em></span>
     </label>
     <button class="btn">Save</button>
   </form>
