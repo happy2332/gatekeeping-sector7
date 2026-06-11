@@ -3,12 +3,24 @@ import io
 import os
 import secrets
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from flask import (
     Flask, Response, g, render_template, request, redirect, session,
     url_for, jsonify, flash,
 )
+
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def now_ist_str():
+    """Current wall time in IST, formatted to match SQLite's stored format."""
+    return datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def now_ist():
+    """Naive datetime in IST wall time (no tz attached, matches stored format)."""
+    return datetime.now(IST).replace(tzinfo=None)
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get("GK_DB") or os.path.join(APP_DIR, "gatekeeping.db")
@@ -140,7 +152,7 @@ def init_db():
             visitor_name TEXT,
             visitor_phone TEXT,
             note TEXT,
-            ts TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            ts TEXT NOT NULL
         );
 
         CREATE INDEX IF NOT EXISTS idx_movements_ts ON movements(ts DESC);
@@ -497,8 +509,8 @@ def api_log():
 
     db.execute(
         """
-        INSERT INTO movements (house_id, vehicle_id, plate, kind, direction, visitor_name, visitor_phone, note)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO movements (house_id, vehicle_id, plate, kind, direction, visitor_name, visitor_phone, note, ts)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             house_id,
@@ -509,6 +521,7 @@ def api_log():
             (data.get("visitor_name") or "").strip() or None,
             (data.get("visitor_phone") or "").strip() or None,
             (data.get("note") or "").strip() or None,
+            now_ist_str(),
         ),
     )
     db.commit()
@@ -639,7 +652,7 @@ def admin_clear_older():
     if days < 1:
         flash("Days must be at least 1", "error")
         return redirect(url_for("admin"))
-    cutoff = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+    cutoff = (now_ist() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
     db = get_db()
     cur = db.execute("DELETE FROM movements WHERE ts < ?", (cutoff,))
     db.commit()
@@ -668,7 +681,7 @@ def admin_export_csv():
         w.writerow([r["ts"], r["plate"], r["direction"], r["kind"],
                     r["house_number"] or "", r["floor"] or "",
                     r["visitor_name"] or "", r["visitor_phone"] or "", r["note"] or ""])
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    stamp = now_ist().strftime("%Y%m%d-%H%M%S")
     return Response(
         buf.getvalue(),
         mimetype="text/csv",
