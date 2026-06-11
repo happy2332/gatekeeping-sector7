@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Admin{% endblock %}
+{% block content %}
+<section class="card">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
+    <h1 style="margin:0">Admin</h1>
+    <form method="post" action="{{ url_for('logout') }}">
+      <button class="link">log out</button>
+    </form>
+  </div>
+  <p class="muted">Destructive actions live here. Double-check before confirming.</p>
+  <ul class="muted" style="padding-left:1.1rem;margin:.4rem 0 0">
+    <li>{{ stats.houses }} houses · {{ stats.vehicles }} registered vehicles</li>
+    <li>{{ stats.movements }} log entries · {{ stats.currently_inside }} currently inside</li>
+  </ul>
+</section>
+
+<section class="card">
+  <h2>Export logs</h2>
+  <p class="muted">Download every movement log entry as a CSV file.</p>
+  <a class="btn" href="{{ url_for('admin_export_csv') }}" style="display:inline-block;text-decoration:none">Download CSV</a>
+</section>
+
+<section class="card">
+  <h2>Clear logs older than N days</h2>
+  <p class="muted">Keeps recent activity, removes old. Houses and vehicles are unaffected.</p>
+  <form method="post" action="{{ url_for('admin_clear_older') }}" class="row" onsubmit="return confirm('Delete log entries older than ' + this.days.value + ' days?')">
+    <label class="field" style="flex:1">
+      <span>Days to keep</span>
+      <input type="number" name="days" value="30" min="1" required>
+    </label>
+    <button class="btn btn--out" style="flex:0 0 auto;align-self:end">Delete older</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Clear ALL logs</h2>
+  <p class="muted">Wipes the entire movement log. Type <code>CLEAR</code> to confirm.</p>
+  <form method="post" action="{{ url_for('admin_clear_logs') }}" class="row"
+        onsubmit="return confirm('This wipes ALL {{ stats.movements }} log entries. Continue?')">
+    <input name="confirm" placeholder="Type CLEAR" required style="flex:1">
+    <button class="btn btn--out" style="flex:0 0 auto">Clear all logs</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Delete a house</h2>
+  <p class="muted">Removes the house and its registered vehicles. Past log entries remain (with the house shown as —).</p>
+  {% if houses %}
+    <table class="data">
+      <thead><tr><th>Number</th><th>Floor</th><th>Owner</th><th>Vehicles</th><th></th></tr></thead>
+      <tbody>
+        {% for h in houses %}
+          <tr>
+            <td><strong>{{ h.number }}</strong></td>
+            <td>{{ h.floor or '—' }}</td>
+            <td>{{ h.owner_name or '—' }}</td>
+            <td>{{ h.vehicle_count }}</td>
+            <td>
+              <form method="post" action="{{ url_for('admin_delete_house', house_id=h.id) }}"
+                    onsubmit="return confirm('Delete {{ h.number }}{% if h.floor %} floor {{ h.floor }}{% endif %} and its {{ h.vehicle_count }} vehicle(s)?')">
+                <button class="link link--danger">delete</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">No houses to delete.</p>
+  {% endif %}
+</section>
+{% endblock %}

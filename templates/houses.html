@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Houses{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Houses</h1>
+  <table class="data sortable">
+    <thead><tr>
+      <th>Number</th><th>Floor</th><th>Owner</th><th>Phone</th>
+      <th data-sort-key="num">Vehicles</th>
+      {% if is_admin %}<th data-sortable="false"></th>{% endif %}
+    </tr></thead>
+    <tbody>
+      {% for h in houses %}
+        <tr>
+          <td><a href="{{ url_for('house_detail', house_id=h.id) }}"><strong>{{ h.number }}</strong></a></td>
+          <td>{{ h.floor or '—' }}</td>
+          <td>{{ h.owner_name or '—' }}</td>
+          <td class="muted">{% if h.phone %}<a href="tel:{{ h.phone | replace(' ', '') }}">{{ h.phone }}</a>{% endif %}</td>
+          <td>{{ h.vehicle_count }}</td>
+          {% if is_admin %}<td><a href="{{ url_for('house_detail', house_id=h.id) }}">edit →</a></td>{% endif %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if is_admin %}
+<section class="card">
+  <h2>Add a house</h2>
+  <form method="post" action="{{ url_for('house_create') }}" class="grid">
+    <label class="field">
+      <span>House number</span>
+      <input name="number" placeholder="e.g. A-104" required>
+    </label>
+    <label class="field">
+      <span>Floor <em>(optional)</em></span>
+      <input name="floor" placeholder="e.g. Ground, 1, 2">
+    </label>
+    <label class="field">
+      <span>Owner name <em>(optional)</em></span>
+      <input name="owner_name" placeholder="e.g. Sharma">
+    </label>
+    <label class="field">
+      <span>Phone <em>(optional)</em></span>
+      <input name="phone" placeholder="10-digit number" inputmode="tel">
+    </label>
+    <button class="btn">Add house</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

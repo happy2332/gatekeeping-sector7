@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block title %}Gatekeeping{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="{{ url_for('static', filename='sortable.js') }}" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a href="{{ url_for('index') }}" class="brand">Gatekeeping · Sector 7 Pocket C</a>
+    <nav>
+      {% if is_guard %}<a href="{{ url_for('gate') }}">Gate</a>{% endif %}
+      <a href="{{ url_for('index') }}">Inside</a>
+      <a href="{{ url_for('log_view') }}">Log</a>
+      <a href="{{ url_for('houses_list') }}">Houses</a>
+      {% if is_admin %}<a href="{{ url_for('admin') }}">Admin</a>{% endif %}
+      {% if is_guard or is_admin %}
+        <form method="post" action="{{ url_for('logout') }}" style="display:inline">
+          <button class="link" style="color:#d1d5db">log out</button>
+        </form>
+      {% else %}
+        <a href="{{ url_for('login') }}">Sign in</a>
+      {% endif %}
+    </nav>
+  </header>
+  <main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="flash flash--{{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>

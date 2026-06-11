@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: gatekeeping-sector7
+    runtime: python
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    # gunicorn binds to $PORT (set by Render). 1 worker is fine for ~100 req/day.
+    # --threads 2 lets us serve a slow request without blocking another guard tap.
+    startCommand: gunicorn --workers 1 --threads 2 --bind 0.0.0.0:$PORT app:app
+    envVars:
+      - key: GK_DB
+        value: /var/data/gatekeeping.db
+      - key: GK_SECRET
+        generateValue: true
+      - key: ADMIN_PASSWORD
+        sync: false   # set this in the Render dashboard, don't commit
+      - key: GUARD_PASSWORD
+        sync: false
+    disk:
+      name: gatekeeping-data
+      mountPath: /var/data
+      sizeGB: 1

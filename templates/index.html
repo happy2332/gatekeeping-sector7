@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Currently Inside{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Currently inside the pocket</h1>
+  <form method="get" class="row" style="margin:.4rem 0 .8rem">
+    <input name="q" value="{{ q or '' }}" placeholder="Search by vehicle, house or visitor name">
+    <button class="btn" style="flex:0 0 auto">Search</button>
+    {% if q %}<a class="btn" style="flex:0 0 auto;background:#6b7280" href="{{ url_for('index') }}">Clear</a>{% endif %}
+  </form>
+  {% if q %}<p class="muted" style="margin:0 0 .5rem">Showing matches for "<strong>{{ q }}</strong>".</p>{% endif %}
+  {% if inside %}
+    <table class="data sortable">
+      <thead><tr>
+        <th>Vehicle</th><th>Type</th><th>House</th><th>Visitor</th>
+        <th data-sort-key="date">Date</th><th data-sort-key="date">Time</th>
+      </tr></thead>
+      <tbody>
+        {% for r in inside %}
+          <tr>
+            <td><strong>{{ r.plate }}</strong></td>
+            <td><span class="badge badge--{{ r.kind }}">{{ r.kind }}</span></td>
+            <td>{% if r.house_id %}<a href="{{ url_for('house_detail', house_id=r.house_id) }}">{{ r.house_number }}{% if r.house_floor %} · {{ r.house_floor }}{% endif %}</a>{% else %}—{% endif %}</td>
+            <td>{{ r.visitor_name or '' }}</td>
+            <td class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_date }}</td>
+            <td class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_time12 }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p class="muted">{% if q %}No matching vehicles currently inside.{% else %}No vehicles currently logged inside.{% endif %}</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Recent activity</h2>
+  <table class="data sortable">
+    <thead><tr>
+      <th data-sort-key="date">Date</th><th data-sort-key="date">Time</th>
+      <th>Vehicle</th><th>Status</th><th>Type</th><th>House</th>
+    </tr></thead>
+    <tbody>
+      {% for r in recent %}
+        <tr>
+          <td class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_date }}</td>
+          <td class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_time12 }}</td>
+          <td>{{ r.plate }}</td>
+          <td><span class="badge badge--{{ r.direction }}">{{ r.direction }}</span></td>
+          <td>{{ r.kind }}</td>
+          <td>{% if r.house_id %}<a href="{{ url_for('house_detail', house_id=r.house_id) }}">{{ r.house_number }}{% if r.house_floor %} · {{ r.house_floor }}{% endif %}</a>{% else %}—{% endif %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

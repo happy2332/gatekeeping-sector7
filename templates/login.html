@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<section class="card" style="max-width:380px;margin:2rem auto">
+  <h1>Sign in</h1>
+  <p class="muted">Enter the admin or guard password.</p>
+  <form method="post" class="grid">
+    <label class="field">
+      <span>Password</span>
+      <input type="password" name="password" required autofocus>
+    </label>
+    <button class="btn">Sign in</button>
+  </form>
+  <p class="muted" style="margin-top:1rem;font-size:.85rem">
+    Residents can <a href="{{ url_for('index') }}">view the log</a> without signing in.
+  </p>
+</section>
+{% endblock %}

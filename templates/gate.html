@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block title %}Gate{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>At the Gate</h1>
+  <p class="muted">Type the last 4 digits of the vehicle number.</p>
+
+  <input id="vehicleSearch" type="search" inputmode="latin" autocapitalize="characters"
+         placeholder="e.g. 1234" autocomplete="off" autofocus>
+  <ul id="suggest" class="house-list" hidden></ul>
+
+  <p class="muted" id="hint" style="margin-top:.6rem">No match? Use <a href="#" id="visitorLink">visitor / unknown vehicle</a>.</p>
+</section>
+
+<section id="visitorSection" class="card hidden">
+  <h2>Log visitor / unknown vehicle</h2>
+  <p class="muted">Pick a house to attach this visitor to, or leave blank for unknown.</p>
+
+  <input id="houseSearch" type="search" placeholder="House number (optional)" autocomplete="off">
+  <ul id="houseList" class="house-list">
+    {% for h in houses %}
+      <li data-id="{{ h.id }}" data-number="{{ h.number }}" data-floor="{{ h.floor or '' }}">
+        <strong>{{ h.number }}</strong>{% if h.floor %} <span class="badge">Floor {{ h.floor }}</span>{% endif %}
+        {% if h.owner_name %}<span class="muted"> — {{ h.owner_name }}</span>{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+  <p id="visitorChosen" class="muted"></p>
+
+  <form id="visitorForm" class="grid">
+    <input name="plate" placeholder="Vehicle number" required autocapitalize="characters">
+    <input name="visitor_name" placeholder="Visitor name (optional)">
+    <input name="visitor_phone" placeholder="Visitor phone (optional)" inputmode="tel">
+    <input name="note" placeholder="Note (optional)">
+    <div class="row">
+      <button type="submit" data-direction="in" class="btn btn--in">Log IN</button>
+      <button type="submit" data-direction="out" class="btn btn--out">Log OUT</button>
+    </div>
+  </form>
+</section>
+
+<script>
+  const search = document.getElementById('vehicleSearch');
+  const suggest = document.getElementById('suggest');
+  const visitorSection = document.getElementById('visitorSection');
+  const visitorLink = document.getElementById('visitorLink');
+  const houseSearch = document.getElementById('houseSearch');
+  const houseList = document.getElementById('houseList');
+  const visitorChosen = document.getElementById('visitorChosen');
+  const visitorForm = document.getElementById('visitorForm');
+  let chosenHouse = null;
+  let timer = null;
+
+  search.addEventListener('input', () => {
+    const q = search.value.trim();
+    clearTimeout(timer);
+    if (q.length < 2) {
+      suggest.hidden = true;
+      suggest.innerHTML = '';
+      return;
+    }
+    timer = setTimeout(() => fetchSuggestions(q), 120);
+  });
+
+  async function fetchSuggestions(q) {
+    const r = await fetch('/api/vehicles/search?q=' + encodeURIComponent(q));
+    const data = await r.json();
+    if (!data.length) {
+      suggest.innerHTML = '<li class="muted" style="cursor:default">No match — try the visitor section below</li>';
+      suggest.hidden = false;
+      return;
+    }
+    suggest.innerHTML = data.map(d => `
+      <li data-plate="${d.plate}" data-house-id="${d.house_id}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap">
+          <div>
+            <strong>${d.plate}</strong>
+            <span class="badge">${d.currently_inside ? 'INSIDE' : 'outside'}</span>
+            <div class="muted" style="font-size:.85rem">
+              ${d.house_number}${d.floor ? ' · Floor ' + d.floor : ''}${d.owner_name ? ' · ' + d.owner_name : ''}
+            </div>
+          </div>
+          <div class="row">
+            <button class="btn btn--in"  data-action="log" data-plate="${d.plate}" data-house-id="${d.house_id}" data-direction="in"  ${d.currently_inside ? 'disabled' : ''}>IN</button>
+            <button class="btn btn--out" data-action="log" data-plate="${d.plate}" data-house-id="${d.house_id}" data-direction="out" ${d.currently_inside ? '' : 'disabled'}>OUT</button>
+          </div>
+        </div>
+      </li>
+    `).join('');
+    suggest.hidden = false;
+  }
+
+  suggest.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-action="log"]');
+    if (!btn) return;
+    btn.disabled = true;
+    const ok = await postLog({
+      plate: btn.dataset.plate,
+      direction: btn.dataset.direction,
+      kind: 'resident',
+      house_id: parseInt(btn.dataset.houseId, 10),
+    });
+    if (ok) {
+      flash(`${btn.dataset.plate} logged ${btn.dataset.direction.toUpperCase()}`);
+      search.value = '';
+      suggest.hidden = true;
+      search.focus();
+    } else {
+      // refresh so disabled state matches server reality
+      fetchSuggestions(search.value.trim());
+    }
+  });
+
+  visitorLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    visitorSection.classList.remove('hidden');
+    visitorSection.scrollIntoView({behavior: 'smooth'});
+  });
+
+  houseSearch.addEventListener('input', () => {
+    const q = houseSearch.value.toUpperCase();
+    [...houseList.children].forEach(li => {
+      const txt = (li.dataset.number + ' ' + (li.dataset.floor || '') + ' ' + li.textContent).toUpperCase();
+      li.style.display = txt.includes(q) ? '' : 'none';
+    });
+  });
+
+  houseList.addEventListener('click', (e) => {
+    const li = e.target.closest('li');
+    if (!li) return;
+    chosenHouse = {id: li.dataset.id, label: li.textContent.trim().replace(/\s+/g, ' ')};
+    visitorChosen.innerHTML = `Visitor for: <strong>${chosenHouse.label}</strong> <button class="link" id="clearChosen">clear</button>`;
+    document.getElementById('clearChosen').addEventListener('click', () => {
+      chosenHouse = null;
+      visitorChosen.textContent = '';
+    });
+  });
+
+  visitorForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = Object.fromEntries(new FormData(visitorForm).entries());
+    data.direction = e.submitter.dataset.direction;
+    data.kind = chosenHouse ? 'visitor' : 'unknown';
+    if (chosenHouse) data.house_id = parseInt(chosenHouse.id, 10);
+    const ok = await postLog(data);
+    if (ok) {
+      flash(`${data.kind} ${data.direction.toUpperCase()} logged for ${data.plate}`);
+      visitorForm.reset();
+    }
+  });
+
+  async function postLog(data) {
+    try {
+      const res = await fetch('/api/log', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data),
+      });
+      if (res.ok) return true;
+      let msg = 'Failed to log — try again';
+      try {
+        const body = await res.json();
+        if (body && body.error) msg = body.error;
+      } catch {}
+      flash(msg, true);
+      return false;
+    } catch {
+      flash('Network error — try again', true);
+      return false;
+    }
+  }
+
+  function flash(msg, bad) {
+    const el = document.createElement('div');
+    el.className = 'toast' + (bad ? ' toast--bad' : '');
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2200);
+  }
+</script>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Movement log{% endblock %}
+{% block content %}
+<section class="card">
+  <h1>Movement log</h1>
+  <form method="get" class="row">
+    <input name="q" value="{{ q }}" placeholder="Search vehicle, house, visitor name">
+    <button class="btn">Search</button>
+  </form>
+  <table class="data sortable">
+    <thead><tr>
+      <th data-sort-key="date">Date</th><th data-sort-key="date">Time</th>
+      <th>Vehicle</th><th>Status</th><th>Type</th><th>House</th>
+      <th>Visitor</th><th data-sortable="false">Note</th>
+    </tr></thead>
+    <tbody>
+      {% for r in rows %}
+        <tr>
+          <td class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_date }}</td>
+          <td class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_time12 }}</td>
+          <td><strong>{{ r.plate }}</strong></td>
+          <td><span class="badge badge--{{ r.direction }}">{{ r.direction }}</span></td>
+          <td><span class="badge badge--{{ r.kind }}">{{ r.kind }}</span></td>
+          <td>{% if r.house_id %}<a href="{{ url_for('house_detail', house_id=r.house_id) }}">{{ r.house_number }}{% if r.house_floor %} · {{ r.house_floor }}{% endif %}</a>{% else %}—{% endif %}</td>
+          <td>{{ r.visitor_name or '' }}{% if r.visitor_phone %} <span class="muted">({{ r.visitor_phone }})</span>{% endif %}</td>
+          <td class="muted">{{ r.note or '' }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}
