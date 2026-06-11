@@ -61,7 +61,7 @@ def get_house_id(number, floor=None):
     _, body, _ = get("/houses")
     pattern = r'<strong>' + re.escape(number) + r'</strong>(?:</a>)?'
     if floor:
-        pattern += r'\s*</td>\s*<td>' + re.escape(floor) + r'</td>'
+        pattern += r'\s*</td>\s*<td[^>]*>' + re.escape(floor) + r'</td>'
     pattern += r'.*?/houses/(\d+)'
     m = re.search(pattern, body, re.S)
     return int(m.group(1)) if m else None
@@ -181,7 +181,7 @@ check("after OUT, search marks vehicle currently_inside=False", target["currentl
 # Inside view should no longer list it
 _, body, _ = get("/")
 check("Inside view no longer lists DL3CAB1234 after OUT",
-      not re.search(r"DL3CAB1234</strong></td>\s*<td><span class=\"badge badge--resident\"", body, re.S))
+      not re.search(r"DL3CAB1234</strong></td>\s*<td[^>]*><span class=\"badge badge--resident\"", body, re.S))
 
 
 # -----------------------------------------------------------------
@@ -226,7 +226,7 @@ check("Inside view lists unknown plate", "TEMP1234X" in body)
 check("unknown row tagged with badge--unknown",
       re.search(r"TEMP1234X.*?badge--unknown", body, re.S))
 check("unknown row has no house",
-      re.search(r"TEMP1234X.*?<td>—</td>", body, re.S))
+      re.search(r"TEMP1234X.*?<td[^>]*>—</td>", body, re.S))
 
 
 # -----------------------------------------------------------------

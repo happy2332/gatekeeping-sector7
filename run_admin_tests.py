@@ -74,7 +74,7 @@ def get_house_id(number, floor=None):
     _, body = follow("/houses")
     pat = r'<strong>' + re.escape(number) + r'</strong>(?:</a>)?'
     if floor:
-        pat += r'\s*</td>\s*<td>' + re.escape(floor) + r'</td>'
+        pat += r'\s*</td>\s*<td[^>]*>' + re.escape(floor) + r'</td>'
     pat += r'.*?/houses/(\d+)'
     m = re.search(pat, body, re.S)
     return int(m.group(1)) if m else None

@@ -47,9 +47,9 @@
       <tbody>
         {% for v in vehicles %}
           <tr>
-            <td><strong>{{ v.plate }}</strong></td>
+            <td data-label="Vehicle"><strong>{{ v.plate }}</strong></td>
             {% if is_admin %}
-              <td>
+              <td data-label="">
                 <form method="post" style="display:inline" onsubmit="return confirm('Remove {{ v.plate }}?')">
                   <input type="hidden" name="action" value="delete_vehicle">
                   <input type="hidden" name="vehicle_id" value="{{ v.id }}">

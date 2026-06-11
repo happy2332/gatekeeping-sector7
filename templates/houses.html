@@ -3,6 +3,13 @@
 {% block content %}
 <section class="card">
   <h1>Houses</h1>
+  <form method="get" class="row" style="margin:.4rem 0 .8rem">
+    <input name="q" value="{{ q or '' }}" placeholder="Search by house, owner or vehicle">
+    <button class="btn" style="flex:0 0 auto">Search</button>
+    {% if q %}<a class="btn" style="flex:0 0 auto;background:#6b7280" href="{{ url_for('houses_list') }}">Clear</a>{% endif %}
+  </form>
+  {% if q %}<p class="muted" style="margin:0 0 .5rem">Showing matches for "<strong>{{ q }}</strong>" ({{ houses|length }} result{{ 's' if houses|length != 1 else '' }}).</p>{% endif %}
+  {% if houses %}
   <table class="data sortable">
     <thead><tr>
       <th>Number</th><th>Floor</th><th>Owner</th><th>Phone</th>
@@ -12,16 +19,19 @@
     <tbody>
       {% for h in houses %}
         <tr>
-          <td><a href="{{ url_for('house_detail', house_id=h.id) }}"><strong>{{ h.number }}</strong></a></td>
-          <td>{{ h.floor or '—' }}</td>
-          <td>{{ h.owner_name or '—' }}</td>
-          <td class="muted">{% if h.phone %}<a href="tel:{{ h.phone | replace(' ', '') }}">{{ h.phone }}</a>{% endif %}</td>
-          <td>{{ h.vehicle_count }}</td>
-          {% if is_admin %}<td><a href="{{ url_for('house_detail', house_id=h.id) }}">edit →</a></td>{% endif %}
+          <td data-label="Number"><a href="{{ url_for('house_detail', house_id=h.id) }}"><strong>{{ h.number }}</strong></a></td>
+          <td data-label="Floor">{{ h.floor or '—' }}</td>
+          <td data-label="Owner">{{ h.owner_name or '—' }}</td>
+          <td data-label="Phone" class="muted">{% if h.phone %}<a href="tel:{{ h.phone | replace(' ', '') }}">{{ h.phone }}</a>{% endif %}</td>
+          <td data-label="Vehicles">{{ h.vehicle_count }}</td>
+          {% if is_admin %}<td data-label=""><a href="{{ url_for('house_detail', house_id=h.id) }}">edit →</a></td>{% endif %}
         </tr>
       {% endfor %}
     </tbody>
   </table>
+  {% else %}
+    <p class="muted">{% if q %}No houses match "{{ q }}".{% else %}No houses yet — add one below.{% endif %}</p>
+  {% endif %}
 </section>
 
 {% if is_admin %}

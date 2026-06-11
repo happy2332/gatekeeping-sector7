@@ -18,12 +18,12 @@
       <tbody>
         {% for r in inside %}
           <tr>
-            <td><strong>{{ r.plate }}</strong></td>
-            <td><span class="badge badge--{{ r.kind }}">{{ r.kind }}</span></td>
-            <td>{% if r.house_id %}<a href="{{ url_for('house_detail', house_id=r.house_id) }}">{{ r.house_number }}{% if r.house_floor %} · {{ r.house_floor }}{% endif %}</a>{% else %}—{% endif %}</td>
-            <td>{{ r.visitor_name or '' }}</td>
-            <td class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_date }}</td>
-            <td class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_time12 }}</td>
+            <td data-label="Vehicle"><strong>{{ r.plate }}</strong></td>
+            <td data-label="Type"><span class="badge badge--{{ r.kind }}">{{ r.kind }}</span></td>
+            <td data-label="House">{% if r.house_id %}<a href="{{ url_for('house_detail', house_id=r.house_id) }}">{{ r.house_number }}{% if r.house_floor %} · {{ r.house_floor }}{% endif %}</a>{% else %}—{% endif %}</td>
+            <td data-label="Visitor">{{ r.visitor_name or '' }}</td>
+            <td data-label="Date" class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_date }}</td>
+            <td data-label="Time" class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_time12 }}</td>
           </tr>
         {% endfor %}
       </tbody>
@@ -43,12 +43,12 @@
     <tbody>
       {% for r in recent %}
         <tr>
-          <td class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_date }}</td>
-          <td class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_time12 }}</td>
-          <td>{{ r.plate }}</td>
-          <td><span class="badge badge--{{ r.direction }}">{{ r.direction }}</span></td>
-          <td>{{ r.kind }}</td>
-          <td>{% if r.house_id %}<a href="{{ url_for('house_detail', house_id=r.house_id) }}">{{ r.house_number }}{% if r.house_floor %} · {{ r.house_floor }}{% endif %}</a>{% else %}—{% endif %}</td>
+          <td data-label="Date" class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_date }}</td>
+          <td data-label="Time" class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_time12 }}</td>
+          <td data-label="Vehicle">{{ r.plate }}</td>
+          <td data-label="Status"><span class="badge badge--{{ r.direction }}">{{ r.direction }}</span></td>
+          <td data-label="Type">{{ r.kind }}</td>
+          <td data-label="House">{% if r.house_id %}<a href="{{ url_for('house_detail', house_id=r.house_id) }}">{{ r.house_number }}{% if r.house_floor %} · {{ r.house_floor }}{% endif %}</a>{% else %}—{% endif %}</td>
         </tr>
       {% endfor %}
     </tbody>

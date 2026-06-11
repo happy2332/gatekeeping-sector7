@@ -61,7 +61,7 @@ def get_house_id(number):
 
 def vehicles_for(house_id):
     _, body, _ = get(f"/houses/{house_id}")
-    rows = re.findall(r'<td><strong>([A-Z0-9]+)</strong></td>', body)
+    rows = re.findall(r'<td[^>]*><strong>([A-Z0-9]+)</strong></td>', body)
     return rows
 
 
@@ -86,7 +86,7 @@ check("add house with all fields — number visible", "A-102" in html)
 check("add house with all fields — owner visible", "Sharma" in html)
 check("add house with all fields — phone visible", "9876500001" in html)
 check("add house with all fields — floor visible",
-      bool(re.search(r"A-102.*?<td>1</td>", html, re.S)),
+      bool(re.search(r"A-102.*?<td[^>]*>1</td>", html, re.S)),
       "expected floor=1 column for A-102")
 
 _, body, _ = post("/houses/new", {"number": "A-101"})
@@ -224,14 +224,14 @@ html = get_houses_html()
 
 
 def count_for(num):
-    m = re.search(re.escape(num) + r'.*?<td>(\d+)</td>\s*<td><a', html, re.S)
+    m = re.search(re.escape(num) + r'.*?<td[^>]*>(\d+)</td>\s*<td[^>]*><a', html, re.S)
     return int(m.group(1)) if m else None
 
 
 # Vehicle on a specific floor of F-601 — counts isolated per (number,floor)
 f601_g_id = None
 _, body, _ = get("/houses")
-m = re.search(r'<strong>F-601</strong>\s*</td>\s*<td>Ground</td>.*?/houses/(\d+)', body, re.S)
+m = re.search(r'<strong>F-601</strong>(?:</a>)?\s*</td>\s*<td[^>]*>Ground</td>.*?/houses/(\d+)', body, re.S)
 if m: f601_g_id = int(m.group(1))
 if f601_g_id:
     post(f"/houses/{f601_g_id}", {"action": "add_vehicle", "plate": "DL5CN1212"})

@@ -57,6 +57,7 @@ input:focus { outline: 2px solid #2563eb33; border-color: #2563eb; }
 .field > span { font-size: .8rem; font-weight: 600; color: #374151; }
 .field > span em { font-style: normal; font-weight: 400; color: var(--muted); }
 .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.row > input[type="search"], .row > input[type="text"], .row > input:not([type]) { flex: 1 1 12rem; min-width: 8rem; }
 .btn {
   padding: .8rem 1rem; border: 0; border-radius: 8px; background: #111827;
   color: #fff; font-weight: 600; font-size: 1rem; cursor: pointer; flex: 1 1 auto;
@@ -117,8 +118,38 @@ table.data th.sortable-th::after {
 table.data th.sortable-th:hover::after { opacity: .7; }
 table.data th[aria-sort="ascending"]::after  { content: "▲"; opacity: 1; color: var(--ink); }
 table.data th[aria-sort="descending"]::after { content: "▼"; opacity: 1; color: var(--ink); }
+@media (max-width: 640px) {
+  /* Topbar wraps onto a second line so brand + nav + log out all fit. */
+  .topbar { flex-direction: column; align-items: stretch; gap: .4rem; padding: .55rem .8rem; }
+  .topbar .brand { font-size: 1rem; }
+  .topbar nav { gap: .9rem; flex-wrap: wrap; font-size: .9rem; }
+  .topbar nav form { padding-left: .7rem; }
+
+  /* Data tables become a vertical stack of "cards" so all fields are visible
+     without horizontal scrolling. The column header for each cell is shown
+     as a small pseudo-element prefix on the left. */
+  table.data,
+  table.data tbody,
+  table.data tr,
+  table.data td { display: block; width: 100%; }
+  table.data thead { display: none; }
+  table.data tr {
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: .55rem .8rem; margin-bottom: .55rem; background: #fff;
+  }
+  table.data td {
+    border: 0; padding: .2rem 0;
+    display: flex; justify-content: space-between;
+    align-items: baseline; gap: .6rem;
+  }
+  table.data td[data-label]:not([data-label=""])::before {
+    content: attr(data-label);
+    font-size: .7rem; text-transform: uppercase; letter-spacing: .03em;
+    color: var(--muted); font-weight: 600;
+    flex: 0 0 5.5rem;
+  }
+}
 @media (max-width: 480px) {
-  .topbar nav a { margin-left: .55rem; font-size: .85rem; }
   .btn { padding: .9rem 1rem; }
-  table.data { font-size: .85rem; }
+  table.data { font-size: .9rem; }
 }

@@ -52,11 +52,11 @@
       <tbody>
         {% for h in houses %}
           <tr>
-            <td><strong>{{ h.number }}</strong></td>
-            <td>{{ h.floor or '—' }}</td>
-            <td>{{ h.owner_name or '—' }}</td>
-            <td>{{ h.vehicle_count }}</td>
-            <td>
+            <td data-label="Number"><strong>{{ h.number }}</strong></td>
+            <td data-label="Floor">{{ h.floor or '—' }}</td>
+            <td data-label="Owner">{{ h.owner_name or '—' }}</td>
+            <td data-label="Vehicles">{{ h.vehicle_count }}</td>
+            <td data-label="">
               <form method="post" action="{{ url_for('admin_delete_house', house_id=h.id) }}"
                     onsubmit="return confirm('Delete {{ h.number }}{% if h.floor %} floor {{ h.floor }}{% endif %} and its {{ h.vehicle_count }} vehicle(s)?')">
                 <button class="link link--danger">delete</button>

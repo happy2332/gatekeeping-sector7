@@ -221,15 +221,35 @@ def index():
 @app.route("/houses")
 def houses_list():
     db = get_db()
-    rows = db.execute(
-        """
-        SELECT h.*, COUNT(v.id) AS vehicle_count
-        FROM houses h LEFT JOIN vehicles v ON v.house_id = h.id
-        GROUP BY h.id
-        ORDER BY h.number
-        """
-    ).fetchall()
-    return render_template("houses.html", houses=rows)
+    q = request.args.get("q", "").strip()
+    if q:
+        like = f"%{q.upper()}%"
+        rows = db.execute(
+            """
+            SELECT h.*, COUNT(v.id) AS vehicle_count
+            FROM houses h LEFT JOIN vehicles v ON v.house_id = h.id
+            WHERE h.id IN (
+                SELECT h2.id FROM houses h2
+                LEFT JOIN vehicles v2 ON v2.house_id = h2.id
+                WHERE h2.number LIKE ?
+                   OR UPPER(h2.owner_name) LIKE ?
+                   OR v2.plate LIKE ?
+            )
+            GROUP BY h.id
+            ORDER BY h.number, h.floor
+            """,
+            (like, like, like),
+        ).fetchall()
+    else:
+        rows = db.execute(
+            """
+            SELECT h.*, COUNT(v.id) AS vehicle_count
+            FROM houses h LEFT JOIN vehicles v ON v.house_id = h.id
+            GROUP BY h.id
+            ORDER BY h.number, h.floor
+            """
+        ).fetchall()
+    return render_template("houses.html", houses=rows, q=q)
 
 
 @app.route("/houses/<int:house_id>", methods=["GET", "POST"])
