@@ -1,4 +1,4 @@
-# Operations — Gatekeeping (Sector 7 Pocket C)
+# Operations — Gatekeeper (Sector 7 Pocket C)
 
 Live URL: **https://gatekeeping-sector7.fly.dev**
 Hosting: Fly.io free tier · region `bom` (Mumbai) · 1 GB volume `gk_data` mounted at `/data`
@@ -86,15 +86,15 @@ sleep 1.5
 
 # Run any one of the three suites
 .venv/bin/python run_tests.py        # 34 tests: houses + vehicles CRUD
-.venv/bin/python run_gate_tests.py   # 56 tests: gate flow, search, IN/OUT, validation
-.venv/bin/python run_admin_tests.py  # 35 tests: admin tab, role boundaries
+.venv/bin/python run_gate_tests.py   # 53 tests: gate flow, search, IN/OUT, validation
+.venv/bin/python run_admin_tests.py  # 37 tests: admin tab, role boundaries
 
 # Cleanup
 kill $(lsof -nP -iTCP:5058 -sTCP:LISTEN -t 2>/dev/null) 2>/dev/null
 rm -f /tmp/gk_test.db
 ```
 
-Total: 125 tests across the three suites. Each suite needs an empty DB — running two back-to-back without `rm -f /tmp/gk_test.db` will fail because of stale fixtures.
+Total: 124 tests across the three suites. Each suite needs an empty DB — running two back-to-back without `rm -f /tmp/gk_test.db` will fail because of stale fixtures.
 
 ---
 
@@ -110,19 +110,39 @@ For a longer retention CSV of just the movement log: log in as admin in the brow
 
 ---
 
+## Reseed the demo dataset (wipes prod data!)
+
+`seed_demo.py` builds 40 houses + 100 vehicles + 90 movements with realistic
+timestamps spread across the last 7 days. Use only when you're OK losing
+current data.
+
+```bash
+.venv/bin/python seed_demo.py --reseed-prod \
+  --target https://gatekeeping-sector7.fly.dev
+```
+
+Locally:
+
+```bash
+.venv/bin/python seed_demo.py --target http://127.0.0.1:5057 \
+  --local-db ./gatekeeping.db
+```
+
+---
+
 ## Roles and what each can do
 
 | URL | Resident (no login) | Guard | Admin |
 |---|---|---|---|
 | `/` (Inside) | ✅ | ✅ | ✅ |
 | `/log` | ✅ | ✅ | ✅ |
-| `/houses` (read-only) | ✅ | ✅ | ✅ |
-| House detail page (incl. tap-to-call phone) | ✅ | ✅ | ✅ |
-| Vehicle search | ✅ | ✅ | ✅ |
+| `/vehicles` (list, search, sort) | ✅ | ✅ | ✅ |
+| `/vehicles/new` (register a vehicle) | ✅ | ✅ | ✅ |
+| Vehicle search via `/api/...` | ✅ | ✅ | ✅ |
 | `/gate` (log IN/OUT) | ❌ | ✅ | ✅ |
-| Add/edit/delete vehicles | ❌ | ❌ | ✅ |
-| Add/edit/delete houses | ❌ | ❌ | ✅ |
-| Clear logs / CSV export / delete house | ❌ | ❌ | ✅ |
+| Edit a vehicle (`/admin/vehicles/<id>/edit`) | ❌ | ❌ | ✅ |
+| Delete a vehicle (auto-deletes house) | ❌ | ❌ | ✅ |
+| Clear logs / CSV export | ❌ | ❌ | ✅ |
 
 Login at `/login`. The password entered chooses the role:
 - matches `ADMIN_PASSWORD` → admin

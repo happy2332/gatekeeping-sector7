@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>{% block title %}Gatekeeping{% endblock %}</title>
+  <title>{% block title %}Gatekeeper{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <script src="{{ url_for('static', filename='sortable.js') }}" defer></script>
 </head>
 <body>
   <header class="topbar">
-    <a href="{{ url_for('index') }}" class="brand">Gatekeeping · Sector 7 Pocket C</a>
+    <a href="{{ url_for('index') }}" class="brand">Gatekeeper · Sector 7 Pocket C</a>
     <nav>
       {% if is_guard %}<a href="{{ url_for('gate') }}">Gate</a>{% endif %}
       <a href="{{ url_for('index') }}">Inside</a>
@@ -33,5 +33,14 @@
     {% endwith %}
     {% block content %}{% endblock %}
   </main>
+  <footer class="site-footer">
+    <span>&copy; 2026 Sector 7 Pocket C RWA</span>
+    <span class="dot">·</span>
+    <span>Built by Happy Mittal &amp; Arnab Samanta</span>
+    <span class="dot">·</span>
+    <a href="mailto:happy2332@gmail.com?subject=Gatekeeper%20app%20issue">Report an issue</a>
+    <span class="dot">·</span>
+    <a href="https://wa.me/918826859252?text=Gatekeeper%20app%20issue%3A%20" target="_blank" rel="noopener">WhatsApp</a>
+  </footer>
 </body>
 </html>

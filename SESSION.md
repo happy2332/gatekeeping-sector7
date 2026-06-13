@@ -1,21 +1,19 @@
-# Session handoff — Gatekeeping (Sector 7 Pocket C)
+# Session handoff — Gatekeeper (Sector 7 Pocket C)
 
-This file captures everything a fresh Claude session needs to pick up where the
-previous one left off: what the app does, the design choices made, what's been
-built so far, and the open follow-ups.
+What a fresh Claude session needs to pick up where the previous one left off:
+what the app does, the design choices, what's shipped, and the open follow-ups.
 
-> If you're a new Claude session: read this first, then `OPERATIONS.md`, then
-> the source. Don't guess at history — `git log` is the source of truth for
-> what shipped and when.
+> Read this first, then `OPERATIONS.md`, then the source. Don't guess at
+> history — `git log --oneline` is the source of truth for what shipped and when.
 
 ---
 
 ## What this app is
 
 A mobile-friendly web app for the gatekeeper at a residential pocket
-(Sector 7 Pocket C). One screen at the gate to log vehicles in/out, a small
-admin tab for managing houses and clearing logs, and read-only views for
-residents.
+(Sector 7 Pocket C). The model is **vehicle-centric**: every plate registered
+to a house is a row in `/vehicles`; the guard logs IN/OUT at `/gate`; the live
+"who is inside" view is at `/`; the timeline is at `/log`.
 
 Origin problem (verbatim from the user's first message): "no effective
 mechanism to track vehicles and visitors entering or leaving the pocket …
@@ -30,7 +28,7 @@ repeatedly raising complaints on the group without any lasting resolution."
 - **Min machines running:** 1 (so the guard doesn't hit cold starts)
 - **GitHub:** https://github.com/happy2332/gatekeeping-sector7
 
-Local dev: `.venv/bin/python app.py` (port 5057 by default).
+Local dev: `.venv/bin/python app.py` (default port 5057, override with PORT).
 
 ---
 
@@ -38,39 +36,44 @@ Local dev: `.venv/bin/python app.py` (port 5057 by default).
 
 - **Flask** + **SQLite**, single-process, gunicorn in production.
 - Templates with Jinja2, vanilla CSS, vanilla JS (no framework, no build step).
-- 18 source files, ~700 lines of Python, mobile-first responsive design.
-- `app.py` holds everything: routes, schema, migrations, role helpers, Jinja
-  filters and context processors. Don't split it up unless it crosses ~1500
-  lines — keeping it in one file is part of the deal.
+- ~12 source files, ~900 lines of Python, mobile-first responsive design.
+- `app.py` holds everything: routes, schema, role helpers, Jinja filters,
+  context processors. Don't split unless it crosses ~1500 lines — single-file
+  is part of the deal.
 
 ### Files at a glance
 
 ```
-app.py                      # all routes + DB code
-fly.toml                    # Fly app config (region bom, volume gk_data)
-Dockerfile                  # python:3.12-slim + tzdata for IST
-render.yaml                 # ❌ removed; we tried Render, ran into free-tier disk limit
-requirements.txt            # Flask + gunicorn
-static/style.css            # mobile-first; ≤640px collapses tables to cards
-static/sortable.js          # click-to-sort headers on any <table class="data sortable">
-templates/base.html         # topbar nav, role-aware
-templates/login.html        # single password field; role chosen by which secret matches
-templates/gate.html         # vehicle search + IN/OUT (guard, admin)
-templates/index.html        # "Currently inside" + Recent activity (everyone)
-templates/log.html          # full movement log + search (everyone)
-templates/houses.html       # houses list + search; add-house form (admin only)
-templates/house_detail.html # house info, vehicles, edit form (admin only)
-templates/admin.html        # delete house, clear/export logs
-run_tests.py                # 35 tests: house + vehicle CRUD
-run_gate_tests.py           # 56 tests: gate flow, search, IN/OUT, validation
-run_admin_tests.py          # 35 tests: admin tab, role boundaries
-OPERATIONS.md               # ops cheat sheet
-SESSION.md                  # this file
+app.py                       # all routes + DB code + validators + filters
+fly.toml                     # Fly config (region bom, volume gk_data)
+Dockerfile                   # python:3.12-slim + tzdata for IST
+requirements.txt             # Flask + gunicorn
+seed_demo.py                 # one-shot 100-vehicle demo seeder (HTTP + flyctl ssh)
+
+static/style.css             # mobile-first; ≤640px collapses tables to cards
+static/sortable.js           # desktop click-to-sort + mobile "Sort by…" dropdown
+
+templates/base.html          # topbar (gradient + brand mark), nav, footer
+templates/login.html         # single password field; role chosen by match
+templates/gate.html          # vehicle search + visitor form (guard/admin only)
+templates/index.html         # "Currently inside" + Recent activity (everyone)
+templates/log.html           # full movement log + filters/search (everyone)
+templates/vehicles.html      # vehicle list (everyone) + edit/delete for admin
+templates/vehicle_new.html   # dedicated "Add a vehicle" form (everyone)
+templates/vehicle_edit.html  # admin-only per-vehicle edit form
+templates/admin.html         # stats, CSV export, clear-logs (admin only)
+
+run_tests.py                 # 34 tests: house + vehicle CRUD, validators
+run_gate_tests.py            # 53 tests: gate flow, search, IN/OUT
+run_admin_tests.py           # 37 tests: admin tab, role boundaries
+
+OPERATIONS.md                # ops cheat sheet
+SESSION.md                   # this file
 ```
 
 ---
 
-## The three roles (load-bearing decision)
+## The three roles
 
 The user explicitly chose this model:
 
@@ -79,24 +82,22 @@ The user explicitly chose this model:
 
 | URL                                  | Resident (no login) | Guard | Admin |
 |--------------------------------------|---------------------|-------|-------|
-| `/` Inside                           | ✅                  | ✅    | ✅    |
+| `/` (Inside)                         | ✅                  | ✅    | ✅    |
 | `/log`                               | ✅                  | ✅    | ✅    |
-| `/houses` (read-only)                | ✅                  | ✅    | ✅    |
-| House detail page (incl. tap-to-call)| ✅                  | ✅    | ✅    |
-| Vehicle search                       | ✅                  | ✅    | ✅    |
-| `/gate` (log IN/OUT)                 | ❌                  | ✅    | ✅    |
-| Add/edit/delete vehicles             | ❌                  | ❌    | ✅    |
-| Add/edit/delete houses               | ❌                  | ❌    | ✅    |
-| Admin tab (delete house, clear logs) | ❌                  | ❌    | ✅    |
+| `/vehicles`                          | ✅                  | ✅    | ✅    |
+| `/vehicles/new` (register)           | ✅                  | ✅    | ✅    |
+| Vehicle search via `/api/...`        | ✅                  | ✅    | ✅    |
+| `/gate` (log IN/OUT)                 | ❌ → /login         | ✅    | ✅    |
+| Edit a vehicle (`/admin/vehicles/<id>/edit`) | ❌          | ❌    | ✅    |
+| Delete a vehicle (`/admin/vehicles/<id>/delete`) | ❌      | ❌    | ✅    |
+| Admin tab (CSV export, clear logs)   | ❌                  | ❌    | ✅    |
 
-Login at `/login`. The password the user enters chooses the role:
-- matches `ADMIN_PASSWORD` → admin
-- matches `GUARD_PASSWORD` → guard
-- else → "Incorrect password"
+Login at `/login`. Password matches `ADMIN_PASSWORD` → admin; matches
+`GUARD_PASSWORD` → guard; else "Incorrect password". Residents never sign in.
 
-Helper decorators in `app.py`: `@guard_required`, `@admin_required`, plus
-`role_at_least()` for inline checks. The `inject_role` context processor
-exposes `is_resident`, `is_guard`, `is_admin` to all templates.
+`@guard_required` and `@admin_required` decorators in `app.py`; `role_at_least()`
+for inline checks; `inject_role` context processor exposes `is_resident`,
+`is_guard`, `is_admin` to templates.
 
 ---
 
@@ -105,51 +106,53 @@ exposes `is_resident`, `is_guard`, `is_admin` to all templates.
 ```
 houses
   id PK
-  number TEXT NOT NULL
-  owner_name TEXT
-  phone TEXT
-  floor TEXT                      -- nullable; multi-floor houses possible
+  number TEXT NOT NULL CHECK(CAST(number AS INTEGER) BETWEEN 100 AND 999)
+  owner_name TEXT NOT NULL
+  phone TEXT NOT NULL
+  floor TEXT NOT NULL CHECK(LOWER(floor) IN
+    ('ground','first','second','third','fourth'))
   phone_masked INTEGER NOT NULL DEFAULT 0
-  -- partial unique indexes (NOT a single UNIQUE on number):
-  --   uniq_house_with_floor: UNIQUE(number, floor) WHERE floor IS NOT NULL
-  --   uniq_house_no_floor:   UNIQUE(number)        WHERE floor IS NULL
+  UNIQUE(number, floor)
 
 vehicles
   id PK
   house_id FK → houses(id) ON DELETE CASCADE
-  plate TEXT UNIQUE              -- normalised: uppercase, strip non-alphanumeric
-  make_model TEXT                -- legacy column, no longer in UI; kept for backward compat
-  colour TEXT                    -- same
+  plate TEXT UNIQUE         -- normalised: uppercase, strip non-alphanumeric
+  make_model TEXT           -- legacy column, no longer in UI
+  colour TEXT               -- same
 
 movements
   id PK
-  house_id FK → houses(id) (nullable; null for unknown vehicles)
-  vehicle_id FK → vehicles(id) (nullable; null for visitors / unknown)
+  house_id FK → houses(id) (nullable; legacy / unknown)
+  vehicle_id FK → vehicles(id) (nullable; visitors aren't registered)
   plate TEXT
   kind TEXT CHECK IN ('resident','visitor','unknown')
   direction TEXT CHECK IN ('in','out')
-  visitor_name TEXT
-  visitor_phone TEXT
-  note TEXT
-  ts TEXT NOT NULL               -- IST wall-time, Python-supplied
+  visitor_name TEXT          -- legacy, no longer captured by UI
+  visitor_phone TEXT         -- same
+  note TEXT                  -- same
+  ts TEXT NOT NULL           -- IST wall-time, Python-supplied
 ```
 
-### Schema migrations are automatic on startup
+### Schema is strict and authoritative
 
-`init_db()` runs at import time (so gunicorn picks it up, not just `__main__`).
-It uses `PRAGMA table_info` to detect missing columns and `ALTER TABLE` them in.
-A one-shot table rebuild drops the legacy `UNIQUE(number)` constraint when it
-detects an autoindex from the original schema. Don't write classic migration
-files — the in-app pattern works for this app's size.
+The CHECK + UNIQUE constraints are enforced at the SQLite level; no app-side
+gymnastics needed. Validators (`validate_house_number`, `validate_floor`) in
+`app.py` reject bad input before the DB ever sees it, with friendly flash
+messages.
 
-### Key invariants enforced in routes (not in schema)
+### Houses auto-delete with their last vehicle
 
-- A house number can have multiple floor entries, OR one floor-less entry,
-  but never both. Enforced in `house_create()` and `house_detail()` POST.
-- A plate can only belong to one house (UNIQUE constraint on `vehicles.plate`).
-- A plate that is currently inside cannot be logged IN again, and vice versa.
-  `/api/log` returns 409 with an error message; the gate UI also disables the
-  irrelevant button per row.
+The model is fully vehicle-centric: a house only exists while at least one
+vehicle is registered to it. On the admin "remove vehicle" path, if the
+deleted vehicle was the house's last one, the house row is dropped too.
+Movement-log rows that referenced that house keep their plate text (display
+shows the plate; house lookup goes via `vehicle.house_id` which is now NULL).
+
+### `/houses/<id>` no longer exists
+
+There is no per-house view anywhere. Everything is reachable from the
+vehicle list. `/houses` is also gone (404). URL is `/vehicles`.
 
 ---
 
@@ -157,9 +160,9 @@ files — the in-app pattern works for this app's size.
 
 ### Plate normalisation
 Plates are stripped of all non-alphanumeric characters and uppercased on input
-(`normalise_plate()`). `dl 3c ab 1234` → `DL3CAB1234`. This means:
-- The same physical car can't be added twice to different houses.
-- The gate search is case- and space-insensitive.
+(`normalise_plate()`). `dl 3c ab 1234` → `DL3CAB1234`. Means the same physical
+car can't be added twice to different houses, and gate search is case- and
+space-insensitive.
 
 ### IST timestamps stored, not derived
 We compute `now_ist_str()` in Python with a fixed `+05:30` offset and pass the
@@ -167,80 +170,95 @@ string to SQLite. Earlier the schema used `datetime('now', 'localtime')` which
 on Fly's UTC containers stored UTC times. The Dockerfile also installs `tzdata`
 and sets `TZ=Asia/Kolkata` as a belt-and-braces fix.
 
-> Existing rows inserted before commit `9d67652` were stamped in UTC. They
-> are NOT retroactively shifted. If the user wants them converted, the
-> migration is in the chat history but was not run.
-
-### Phone masking
-Per-house `phone_masked` boolean. When set:
-- Admin and guard always see the phone (with tap-to-call `tel:` link).
-- Residents see "hidden" instead.
-- The toggle is a checkbox on Add-house and Edit-house forms.
-- A Jinja context processor exposes `phone_visible(house)` so templates
-  don't repeat the rule.
+### Phone masking is feature-flagged off
+Per-house `phone_masked` boolean exists in the schema, but the toggle is
+hidden in the UI (env var `GK_PHONE_MASKING`, default off). Every role sees
+every phone. To re-enable: `flyctl secrets set GK_PHONE_MASKING=1`.
 
 ### Mobile responsive tables
-At ≤640px, every `<table class="data">` collapses to a vertical card layout
-via CSS. Each `<td>` has a `data-label="..."` attribute that the CSS shows as
-a small uppercase prefix on the left. Saved scrolling on the houses list
-(6 columns) without a JS framework.
+At ≤640px every `<table class="data">` collapses to a vertical stack of cards.
+Each `<td>` carries `data-label="..."` which the CSS shows as a small
+uppercase prefix. Wide tables (e.g. `/log` with 8 columns) are wrapped in
+`<div class="table-wrap">` for horizontal scroll-on-overflow on desktop.
+
+### Mobile sort dropdown
+At ≤640px the table headers are hidden (cards layout), so click-to-sort
+isn't reachable. `sortable.js` injects a `<select>` "Sort by…" above each
+sortable table at mobile widths. Each sortable column appears twice (↑ asc,
+↓ desc). Reuses the same `applySort()` function as desktop.
+
+### Why house numbers 100–999 + 5 floors
+The user's pocket has flat numbers in the 100–999 range and at most 5 levels.
+The form uses an `<input type="number" min="100" max="999">` plus a `<datalist>`
+of all 900 candidates so the browser does type-to-search out of the box. Floor
+is a `<select>` of fixed values (`ground`, `first`, `second`, `third`, `fourth`).
+Owner name and phone are required.
+
+### Smart "Add a vehicle" form
+The form lives at `/vehicles/new`. As the user picks a number and floor, it
+hits `/api/houses/lookup` and either:
+- Auto-fills owner+phone (read-only) and switches the button to
+  "Add vehicle to N (Floor)" if the unit already exists.
+- Stays in new-house mode otherwise.
+
+This lets a resident with a previously-registered house add a second car
+without re-typing owner/phone.
+
+### Admin edit on `/vehicles`
+`/admin/vehicles/<id>/edit` lets admin change the plate, owner, phone, or
+move the vehicle to a different (number, floor). Plate uniqueness checked
+case+space-insensitively. Plate rename also updates `movements.plate` so the
+log keeps finding the vehicle. Move-to-different-house updates the vehicle's
+`house_id`; if the source house's last vehicle just left, the source house is
+auto-deleted (per the rule above).
 
 ### Session secret
 `GK_SECRET` env var if set; otherwise `secrets.token_hex(16)` per process.
-On Fly, `GK_SECRET` is set so admin sessions survive restarts. **Don't
-remove the fallback** — it keeps `python app.py` working locally without env vars.
+On Fly, `GK_SECRET` is set so admin sessions survive restarts. Don't remove
+the fallback — it keeps `python app.py` working locally without env vars.
 
 ### Why no users table
-The user opted for role-by-password. Per-user accounts add a lot of UI
+Role-by-password was an explicit choice. Per-user accounts add a lot of UI
 (create / list / disable users) for an MVP that has 1 admin and 1–2 guards.
 If/when the society grows or wants per-guard audit trails, switch to a real
 `users` table. Until then, do not add it.
 
 ---
 
-## Build timeline (what got shipped, in order)
+## UI polish
 
-Anchored by `git log --oneline` so a future session can reconstruct context:
+`static/style.css` was deliberately polished but kept utilitarian:
 
-1. **Initial scaffold** (`a25c155`) — Flask app, SQLite, gate/houses/log/inside
-   pages, basic mobile CSS, sample data. Single role, no auth.
-2. **Multi-floor house support** — `(number, floor)` partial-unique indexes;
-   per-route check that prevents mixing floored and floor-less entries for
-   the same number.
-3. **Vehicle search at the gate** — `/api/vehicles/search` returns up to 10
-   plates matching a partial query (≥2 chars). The gate page got a debounced
-   live-suggestion list. Disabled IN/OUT buttons per `currently_inside`.
-4. **Three roles** — single `/login` page, role chosen by which password
-   matches. `@guard_required`, `@admin_required`. Templates updated to
-   hide admin actions from residents.
-5. **Admin tab** — delete house (cascading vehicle delete), clear all logs
-   (typed `CLEAR` confirmation), clear logs older than N days, CSV export.
-6. **Sortable + searchable tables** — `static/sortable.js` (vanilla JS, ~50
-   lines). All four data tables sortable; Inside/Log/Houses each have a
-   server-side `?q=` filter.
-7. **Status column rename** — `Dir` → `Status`. Date and Time split into
-   separate columns; Time in 12-hour format with am/pm.
-8. **Render → Fly switch** (`0f2ac3a`) — Render free tier dropped persistent
-   disks, so `render.yaml` was removed and `fly.toml` + `Dockerfile` added.
-9. **Operations doc** (`b8325e6`) — `OPERATIONS.md`.
-10. **Mobile-friendly tables + house search** (`d086621`) — table → card on
-    narrow screens, Houses tab now searches by house, owner, or vehicle.
-11. **Phone masking** (`74ec76d`).
-12. **IST timezone** (`9d67652`).
+- Topbar: indigo→purple gradient with a small gold accent mark beside the
+  brand title.
+- Cards: soft shadow + 1px hairline border; rounded corners.
+- Buttons: subtle vertical gradients (green for IN, red for OUT, dark for
+  default), tiny press animation.
+- Badges: 1px coloured border in the badge's family.
+- Filter pills: brand-coloured gradient on the active pill.
+- Table rows: subtle hover highlight on desktop.
+- Footer: small attribution line with mailto + WhatsApp on every page.
+
+No design system dependency, no build step, no JS framework.
+
+---
+
+## Filters and counters on each tab
+
+- `/` (Inside) — filter pills (Resident / Visitor / All); search by vehicle,
+  house, owner; counter badge shows `inside_total / vehicles_total`.
+- `/log` — filter pills (kind + status); search; only Time / House / Owner
+  are sortable.
+- `/vehicles` — search; only House and Owner sortable; counter badge shows
+  total vehicles; muted line shows total houses registered.
 
 ---
 
 ## Tests
 
-136 total across three suites. Each suite needs an empty DB.
+124 total across three suites. Each suite expects an empty DB.
 
-- `run_tests.py` — 35 tests: house + vehicle CRUD, multi-floor rules, edge cases.
-- `run_gate_tests.py` — 56 tests: gate UI, search API, IN/OUT, visitor flow,
-  unknown flow, API validation, log view, IN/OUT guard.
-- `run_admin_tests.py` — 35 tests: resident/guard/admin role boundaries,
-  delete house, clear logs, CSV export.
-
-Run pattern:
+Run pattern (one suite at a time):
 ```bash
 kill $(lsof -nP -iTCP:5058 -sTCP:LISTEN -t 2>/dev/null) 2>/dev/null
 rm -f /tmp/gk_test.db
@@ -248,75 +266,61 @@ GK_DB=/tmp/gk_test.db PORT=5058 ADMIN_PASSWORD=admin GUARD_PASSWORD=guard \
   .venv/bin/python app.py > /tmp/gk_test_server.log 2>&1 &
 sleep 1.5
 .venv/bin/python run_tests.py
-# repeat with rm -f /tmp/gk_test.db between suites
+# repeat for run_gate_tests.py, run_admin_tests.py with rm -f between
 ```
 
 The tests parse rendered HTML with regex. When you change templates, expect
-to update the patterns. Common gotchas the regexes already account for:
+to update patterns. Common gotchas the regexes account for:
 - `<td>` may have `data-label="..."` attributes
-- House number cells are wrapped in `<a>` tags
-- Multi-floor rows have additional `<td>` columns
+- House lookups use `/api/houses/lookup?number=&floor=` (no `/houses/<id>` URL exists)
+- Some tests use a no-redirect opener (`_bare`) when posting to admin routes
+  so curl doesn't try to re-POST the redirect target.
 
 ---
 
-## Open follow-ups (in rough priority order)
+## Open follow-ups (rough priority)
 
-1. **Replace placeholder Fly secrets.** `ADMIN_PASSWORD=admin` /
-   `GUARD_PASSWORD=guard` were set during deploy. The user said they'd update
-   them but I have no confirmation that's been done. Verify with
-   `flyctl secrets list` and `flyctl secrets set ...` if needed.
-2. **Revoke the GitHub PAT.** During initial setup the user pasted a
-   fine-grained PAT (`github_pat_11ACB7EDY0...`) into chat to push the repo.
-   It needs to be deleted at https://github.com/settings/tokens?type=beta.
-   This was flagged twice in the original session but never confirmed done.
-3. **Backfill: shift old movement rows from UTC → IST?** Rows inserted before
-   commit `9d67652` are in UTC. The migration is a one-shot SQL update:
-   ```sql
-   UPDATE movements
-   SET ts = strftime('%Y-%m-%d %H:%M:%S', ts, '+5 hours', '+30 minutes')
-   WHERE ts < '<deploy time of 9d67652>';
-   ```
-   Only run if the user confirms all pre-9d67652 rows really were stamped on
-   Fly (UTC), not on the local Mac (which would be IST already).
-4. **Backups.** Fly retains 5 daily volume snapshots automatically. Consider:
-   - A weekly cron on the user's Mac that runs `flyctl ssh sftp get` to pull
-     `/data/gatekeeping.db`.
-   - Or a route that triggers a CSV email.
-5. **Photo of the visitor's vehicle.** Frequently asked-for in society apps —
-   guard takes a phone-camera shot when entering an unknown plate.
-   `<input type="file" accept="image/*" capture="environment">` then store in
-   the volume.
-6. **Resident notification when a visitor arrives.** WhatsApp/SMS link with
-   the visitor's plate + name. Twilio or a Telegram bot.
-7. **Per-guard accounting.** If multiple guards share the gate phone we lose
-   any "who logged this" attribution. Switch to a users table when this matters.
-8. **Auto-clear stale "currently inside" entries.** A vehicle logged IN with
-   no later OUT stays inside forever. Should we auto-OUT at 04:00 IST? Or
-   warn admin after N hours? User has not yet decided.
+1. **App name decided: "Gatekeeper".** Brand title in topbar reads
+   "Gatekeeper · Sector 7 Pocket C" everywhere. Short, simple to pronounce,
+   self-explanatory for elders.
+2. **Replace placeholder Fly secrets.** `ADMIN_PASSWORD` and `GUARD_PASSWORD`
+   were set to `admin` / `guard` during initial deploy. Confirm with the user
+   if they've been rotated; rotate via `flyctl secrets set ...` if not.
+3. **GitHub PAT.** A fine-grained PAT was pasted in chat earlier this session
+   to push the initial commit. Should be revoked at
+   https://github.com/settings/tokens?type=beta if not already.
+4. **Phone number on public footer.** The footer includes a WhatsApp link to
+   the user's personal number. User explicitly opted in. If they ever want it
+   pulled, edit `templates/base.html`.
+5. **Backups.** Fly retains 5 daily volume snapshots automatically. For
+   external backups, `flyctl ssh sftp get /data/gatekeeping.db <local>`.
+6. **Photo of visitor's vehicle.** Frequently asked-for; not built. Would use
+   `<input type="file" accept="image/*" capture="environment">`.
+7. **Resident notification when visitor arrives.** Telegram bot or Twilio.
+8. **Per-guard accounting.** Same as the "no users table" decision.
+9. **Auto-clear stale "currently inside".** A vehicle logged IN with no later
+   OUT stays inside forever. Open question: auto-OUT at 04:00 IST? Warn admin
+   after N hours?
 
 ---
 
 ## Things to NOT do unless asked
 
 - Don't introduce a frontend framework. The vanilla JS works.
-- Don't split `app.py` into modules. ~700 lines is fine in one file.
+- Don't split `app.py`. ~900 lines is fine in one file.
 - Don't add user accounts. Role-by-password is the explicit choice.
-- Don't add per-user audit trail columns. Same reason.
-- Don't rebuild the schema from scratch — use the in-app `ALTER TABLE` pattern.
-- Don't drop the legacy `make_model` / `colour` columns. They're empty and
-  unused but the migration would make this file longer than the savings.
-- Don't add CSS preprocessors / build steps. Keep `static/style.css` plain.
-- Don't add database connection pooling or migrate to Postgres. SQLite is
-  fine for ~100 events/day on the volume Fly already provisioned.
+- Don't bring back per-house pages or links. Vehicle-centric is the model.
+- Don't drop the legacy `make_model` / `colour` / `visitor_name` columns —
+  they're empty for new rows but the migration cost would exceed the savings.
+- Don't add CSS preprocessors. Keep `static/style.css` plain.
+- Don't add Postgres or connection pooling. SQLite is fine for ~100 events/day.
 
 ---
 
 ## Quick orientation for a new session
 
-If the user comes back with a feature request, do this in order:
-
-1. Read this file. (You did, good.)
-2. Check `git log --oneline` to see anything I shipped after this was written.
+1. Read this file. (Done.)
+2. `git log --oneline -20` to see anything shipped after this was written.
 3. Skim `app.py` — the code is the source of truth.
 4. Look at the most recent template the user is talking about.
 5. Make the change. Run the relevant test suite. Deploy with
@@ -328,10 +332,11 @@ If the user comes back with a feature request, do this in order:
 
 ## Contact / scope reminders
 
-- **User:** Happy Mittal (`happy2332@gmail.com` for personal repo, also has
-  Amazon work identity `mithappy@amazon.com` set globally — don't let that
-  slip into commits in this repo).
+- **User:** Happy Mittal (`happy2332@gmail.com` for the personal repo;
+  Amazon work identity `mithappy@amazon.com` is the global git default —
+  don't let it slip into commits in this repo).
 - **Repo identity is per-repo.** `git config user.email` inside this dir
   must show `happy2332@gmail.com`, not the Amazon one.
+- **Co-author / second name** in the footer: Arnab Samanta.
 - **The user is technical** but not a full-time web dev. Explain trade-offs
-  briefly, name files and commands explicitly, don't generate hand-wavy plans.
+  briefly, name files and commands explicitly, no hand-wavy plans.
