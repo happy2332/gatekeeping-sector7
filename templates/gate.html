@@ -21,7 +21,7 @@
   <ul id="houseList" class="house-list">
     {% for h in houses %}
       <li data-id="{{ h.id }}" data-number="{{ h.number }}" data-floor="{{ h.floor or '' }}">
-        <strong>{{ h.number }}</strong>{% if h.floor %} <span class="badge">Floor {{ h.floor }}</span>{% endif %}
+        <strong>{{ h.number }}</strong>{% if h.floor %} <span class="badge">{{ floor_labels.get(h.floor, h.floor) }} Floor</span>{% endif %}
         {% if h.owner_name %}<span class="muted"> — {{ h.owner_name }}</span>{% endif %}
       </li>
     {% endfor %}
@@ -47,6 +47,8 @@
   const visitorChosen = document.getElementById('visitorChosen');
   const visitorForm = document.getElementById('visitorForm');
   let chosenHouse = null;
+  const FLOOR_LABELS = {{ floor_labels | tojson }};
+  function floorLabel(f) { return f ? (FLOOR_LABELS[f] || f) + ' Floor' : ''; }
   let timer = null;
 
   search.addEventListener('input', () => {
@@ -71,7 +73,7 @@
     suggest.innerHTML = data.map(d => {
       const kindBadge = d.kind === 'resident' ? '' : `<span class="badge badge--${d.kind}">${d.kind}</span>`;
       const houseText = d.house_number
-        ? `${d.house_number}${d.floor ? ' · Floor ' + d.floor : ''}${d.owner_name ? ' · ' + d.owner_name : ''}`
+        ? `${d.house_number}${d.floor ? ' · ' + floorLabel(d.floor) : ''}${d.owner_name ? ' · ' + d.owner_name : ''}`
         : '<em>no house</em>';
       return `
       <li data-plate="${d.plate}" data-house-id="${d.house_id || ''}" data-kind="${d.kind}">
