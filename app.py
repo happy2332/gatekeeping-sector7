@@ -231,7 +231,12 @@ def index():
         found = db.execute(
             """
             SELECT v.plate, h.number AS house_number, h.floor AS house_floor,
-                   h.owner_name, h.phone, h.phone_masked
+                   h.owner_name, h.phone, h.phone_masked,
+                   (
+                     SELECT direction FROM movements
+                     WHERE plate = v.plate
+                     ORDER BY id DESC LIMIT 1
+                   ) AS last_direction
             FROM vehicles v JOIN houses h ON h.id = v.house_id
             WHERE UPPER(v.plate) = ?
             """,

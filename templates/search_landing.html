@@ -15,8 +15,15 @@
   </form>
 
   {% if found %}
+    {% set inside = found.last_direction == 'in' %}
     <div class="card" style="margin-top:.8rem;background:#f0fdf4;border:1px solid #bbf7d0">
-      <h2 style="margin:0 0 .4rem">{{ found.plate }}</h2>
+      <h2 style="margin:0 0 .4rem">
+        {{ found.plate }}
+        <span class="badge {{ 'badge--in' if inside else 'badge--out' }}"
+              style="font-size:.75rem;vertical-align:middle">
+          {{ 'INSIDE' if inside else 'OUTSIDE' }}
+        </span>
+      </h2>
       <dl class="house-info">
         <dt>House</dt>
         <dd>{{ found.house_number }} · {{ floor_labels.get(found.house_floor, found.house_floor) }} Floor</dd>
