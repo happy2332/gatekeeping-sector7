@@ -214,19 +214,20 @@ check("visitor by house_number attached to B-201",
 
 
 # -----------------------------------------------------------------
-section("UNKNOWN VEHICLE FLOW")
+section("UNKNOWN KIND REJECTED")
 
+# 'unknown' is no longer a valid kind. Every entry must be resident or visitor.
 status, _, _ = post("/api/log", json_body={
-    "plate": "TEMP1234X", "direction": "in", "kind": "unknown", "note": "courier",
+    "plate": "TEMP1234X", "direction": "in", "kind": "unknown",
 })
-check("POST unknown IN returns 200", status == 200)
+check("POST kind=unknown → 400", status == 400)
 
-_, body, _ = get("/")
-check("Inside view lists unknown plate", "TEMP1234X" in body)
-check("unknown row tagged with badge--unknown",
-      re.search(r"TEMP1234X.*?badge--unknown", body, re.S))
-check("unknown row has no house",
-      re.search(r"TEMP1234X.*?<td[^>]*>—</td>", body, re.S))
+# Visitor without a house also rejected
+status, body, _ = post("/api/log",
+    json_body={"plate": "VISIT001", "direction": "in", "kind": "visitor"})
+check("visitor without a house → 400", status == 400)
+check("400 body mentions 'House is required'",
+      "house is required" in body.lower())
 
 
 # -----------------------------------------------------------------
@@ -248,29 +249,29 @@ check("bad kind → 400", status == 400)
 
 # Empty plate
 status, _, _ = post("/api/log",
-    json_body={"plate": "  ", "direction": "in", "kind": "unknown"})
+    json_body={"plate": "  ", "direction": "in", "kind": "visitor", "house_id": a101})
 check("empty plate → 400", status == 400)
 
-# Already-inside / not-inside guard
-post("/api/log", json_body={"plate": "AI0001", "direction": "in", "kind": "unknown"})
+# Already-inside / not-inside guard (use visitor kind w/ house)
+post("/api/log", json_body={"plate": "AI0001", "direction": "in", "kind": "visitor", "house_id": a101})
 status, body, _ = post("/api/log",
-    json_body={"plate": "AI0001", "direction": "in", "kind": "unknown"})
+    json_body={"plate": "AI0001", "direction": "in", "kind": "visitor", "house_id": a101})
 check("logging IN twice in a row → 409", status == 409,
       f"got {status} body={body!r}")
 check("409 body mentions 'already inside'",
       status == 409 and "already inside" in body.lower())
 
 # OUT once works, second OUT rejected
-post("/api/log", json_body={"plate": "AI0001", "direction": "out", "kind": "unknown"})
+post("/api/log", json_body={"plate": "AI0001", "direction": "out", "kind": "visitor", "house_id": a101})
 status, body, _ = post("/api/log",
-    json_body={"plate": "AI0001", "direction": "out", "kind": "unknown"})
+    json_body={"plate": "AI0001", "direction": "out", "kind": "visitor", "house_id": a101})
 check("logging OUT twice in a row → 409", status == 409)
 check("409 body mentions 'not inside'",
       status == 409 and "not inside" in body.lower())
 
 # Fresh plate going OUT directly is also rejected (it's not inside)
 status, body, _ = post("/api/log",
-    json_body={"plate": "AI0002", "direction": "out", "kind": "unknown"})
+    json_body={"plate": "AI0002", "direction": "out", "kind": "visitor", "house_id": a101})
 check("OUT for never-seen plate → 409", status == 409)
 
 # Search shows currently_inside flag, used by client to disable buttons
@@ -318,15 +319,15 @@ check("/log search by visitor name finds row", "UP14XY9999" in body)
 section("CURRENTLY-INSIDE EDGE CASE")
 
 # Log a fresh plate IN then OUT — should not appear in Inside
-post("/api/log", json_body={"plate": "TEST00001", "direction": "in", "kind": "unknown"})
-post("/api/log", json_body={"plate": "TEST00001", "direction": "out", "kind": "unknown"})
+post("/api/log", json_body={"plate": "TEST00001", "direction": "in", "kind": "visitor", "house_id": a101})
+post("/api/log", json_body={"plate": "TEST00001", "direction": "out", "kind": "visitor", "house_id": a101})
 _, body, _ = get("/")
 inside_section = re.search(r"<h1>Currently inside.*?</section>", body, re.S).group(0)
 check("vehicle that went IN then OUT is not in 'currently inside'",
       "TEST00001" not in inside_section)
 
 # Log OUT directly (no prior IN) — appears in log but NOT in Inside
-post("/api/log", json_body={"plate": "TEST00002", "direction": "out", "kind": "unknown"})
+post("/api/log", json_body={"plate": "TEST00002", "direction": "out", "kind": "visitor", "house_id": a101})
 _, body, _ = get("/")
 inside_section = re.search(r"<h1>Currently inside.*?</section>", body, re.S).group(0)
 check("vehicle with only an OUT event is not in 'currently inside'",

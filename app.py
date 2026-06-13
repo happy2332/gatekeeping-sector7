@@ -212,7 +212,7 @@ def index():
     db = get_db()
     q = request.args.get("q", "").strip()
     kind_filter = request.args.get("kind", "").strip().lower()
-    if kind_filter not in ("resident", "visitor", "unknown"):
+    if kind_filter not in ("resident", "visitor"):
         kind_filter = ""
     params = []
     where_extra = ""
@@ -459,7 +459,7 @@ def api_vehicle_search():
     ).fetchall()
     seen_plates = {r["plate"] for r in registered}
 
-    # Visitor / unknown plates seen in recent movements (not in vehicles table).
+    # Visitor plates seen in recent movements (not in vehicles table).
     visitor_rows = db.execute(
         """
         SELECT m.plate,
@@ -467,7 +467,7 @@ def api_vehicle_search():
                m.kind
         FROM movements m
         LEFT JOIN houses h ON h.id = m.house_id
-        WHERE m.kind IN ('visitor', 'unknown')
+        WHERE m.kind = 'visitor'
           AND UPPER(m.plate) LIKE ?
           AND m.id IN (SELECT MAX(id) FROM movements GROUP BY plate)
         ORDER BY (CASE WHEN UPPER(m.plate) LIKE ? THEN 0 ELSE 1 END), m.id DESC
@@ -549,7 +549,7 @@ def api_log():
     plate = normalise_plate(data.get("plate", ""))
     direction = data.get("direction")
     kind = data.get("kind")
-    if direction not in ("in", "out") or kind not in ("resident", "visitor", "unknown") or not plate:
+    if direction not in ("in", "out") or kind not in ("resident", "visitor") or not plate:
         return jsonify({"error": "bad request"}), 400
 
     db = get_db()
@@ -575,6 +575,9 @@ def api_log():
         if v:
             vehicle_id = v["id"]
             house_id = house_id or v["house_id"]
+
+    if not house_id:
+        return jsonify({"error": "House is required for every log entry"}), 400
 
     db.execute(
         """
@@ -602,7 +605,7 @@ def log_view():
     db = get_db()
     q = request.args.get("q", "").strip()
     kind_filter = request.args.get("kind", "").strip().lower()
-    if kind_filter not in ("resident", "visitor", "unknown"):
+    if kind_filter not in ("resident", "visitor"):
         kind_filter = ""
     status_filter = request.args.get("status", "").strip().lower()
     if status_filter not in ("in", "out"):

@@ -20,7 +20,6 @@
     <a href="{{ qs() }}"                  class="{{ 'active' if not kind_filter else '' }}">All</a>
     <a href="{{ qs(kind='resident') }}"   class="{{ 'active' if kind_filter == 'resident' else '' }}">Resident</a>
     <a href="{{ qs(kind='visitor')  }}"   class="{{ 'active' if kind_filter == 'visitor'  else '' }}">Visitor</a>
-    <a href="{{ qs(kind='unknown')  }}"   class="{{ 'active' if kind_filter == 'unknown'  else '' }}">Unknown</a>
   </div>
   {% if q or kind_filter %}<p class="muted" style="margin:0 0 .5rem">Showing
     {%- if kind_filter %} <strong>{{ kind_filter }}</strong> entries{% endif %}

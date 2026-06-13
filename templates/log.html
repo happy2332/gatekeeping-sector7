@@ -22,7 +22,6 @@
     <a href="{{ qs(status=status_filter) }}" class="{{ 'active' if not kind_filter else '' }}">All</a>
     <a href="{{ qs(kind='resident', status=status_filter) }}" class="{{ 'active' if kind_filter == 'resident' else '' }}">Resident</a>
     <a href="{{ qs(kind='visitor',  status=status_filter) }}" class="{{ 'active' if kind_filter == 'visitor'  else '' }}">Visitor</a>
-    <a href="{{ qs(kind='unknown',  status=status_filter) }}" class="{{ 'active' if kind_filter == 'unknown'  else '' }}">Unknown</a>
   </div>
   <div class="pills">
     <span class="label">Status:</span>

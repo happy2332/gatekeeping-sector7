@@ -9,14 +9,14 @@
          placeholder="e.g. 1234" autocomplete="off" autofocus>
   <ul id="suggest" class="house-list" hidden></ul>
 
-  <p class="muted" id="hint" style="margin-top:.6rem">No match? Use <a href="#" id="visitorLink">visitor / unknown vehicle</a>.</p>
+  <p class="muted" id="hint" style="margin-top:.6rem">No match? Use <a href="#" id="visitorLink">log visitor vehicle</a>.</p>
 </section>
 
 <section id="visitorSection" class="card hidden">
-  <h2>Log visitor / unknown vehicle</h2>
-  <p class="muted">Pick a house to attach this visitor to, or leave blank for unknown.</p>
+  <h2>Log visitor vehicle</h2>
+  <p class="muted">Pick the house this visitor is going to.</p>
 
-  <input id="houseSearch" type="search" placeholder="House number (optional)" autocomplete="off">
+  <input id="houseSearch" type="search" placeholder="House number" autocomplete="off">
   <ul id="houseList" class="house-list">
     {% for h in houses %}
       <li data-id="{{ h.id }}" data-number="{{ h.number }}" data-floor="{{ h.floor or '' }}">
@@ -141,13 +141,18 @@
 
   visitorForm.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (!chosenHouse) {
+      flash('Please pick a house first', true);
+      houseSearch.focus();
+      return;
+    }
     const data = Object.fromEntries(new FormData(visitorForm).entries());
     data.direction = e.submitter.dataset.direction;
-    data.kind = chosenHouse ? 'visitor' : 'unknown';
-    if (chosenHouse) data.house_id = parseInt(chosenHouse.id, 10);
+    data.kind = 'visitor';
+    data.house_id = parseInt(chosenHouse.id, 10);
     const ok = await postLog(data);
     if (ok) {
-      flash(`${data.kind} ${data.direction.toUpperCase()} logged for ${data.plate}`);
+      flash(`Visitor ${data.direction.toUpperCase()} logged for ${data.plate}`);
       visitorForm.reset();
     }
   });

@@ -95,7 +95,7 @@ post(f"/houses/{a102}", form={"action": "add_vehicle", "plate": "DL8CAF7788"})
 post(f"/houses/{b201}", form={"action": "add_vehicle", "plate": "HR26DK9999"})
 post("/api/log", json_body={"plate": "DL3CAB1234", "direction": "in", "kind": "resident", "house_id": a101})
 post("/api/log", json_body={"plate": "DL3CAB1234", "direction": "out", "kind": "resident", "house_id": a101})
-post("/api/log", json_body={"plate": "X1Y2", "direction": "in", "kind": "unknown"})
+post("/api/log", json_body={"plate": "X1Y2", "direction": "in", "kind": "visitor", "house_id": int(a101)})
 post("/logout")
 check("setup completed", a101 and a102 and b201)
 
@@ -121,7 +121,7 @@ check("resident: 'Add a house' form NOT shown without admin login",
       "Add a house" not in body or "edit →" not in body)
 # Resident cannot post log
 status, _, _ = post("/api/log",
-    json_body={"plate": "ZZZ", "direction": "in", "kind": "unknown"})
+    json_body={"plate": "ZZZ", "direction": "in", "kind": "visitor", "house_number": "A-101"})
 check("resident cannot POST /api/log",
       status in (301, 302), f"got status={status}")
 # Resident cannot reach /gate
@@ -160,7 +160,7 @@ status, _, _ = post("/houses/new", form={"number": "Z-999"})
 check("guard cannot create houses (redirected)", status in (301, 302))
 # But guard CAN log via api/log
 status, _, _ = post("/api/log",
-    json_body={"plate": "GUARD1", "direction": "in", "kind": "unknown"})
+    json_body={"plate": "GUARD1", "direction": "in", "kind": "visitor", "house_number": "A-101"})
 check("guard CAN POST /api/log", status == 200)
 # Re-login as admin for the rest of the suite
 post("/logout")
