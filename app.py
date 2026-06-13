@@ -228,13 +228,16 @@ def index():
     found = None
     not_found = False
     if q_norm:
+        # First try registered (resident) vehicles.
         found = db.execute(
             """
-            SELECT v.plate, h.number AS house_number, h.floor AS house_floor,
+            SELECT v.plate AS plate,
+                   h.number AS house_number, h.floor AS house_floor,
                    h.owner_name, h.phone, h.phone_masked,
+                   'resident' AS kind,
                    (
                      SELECT direction FROM movements
-                     WHERE plate = v.plate
+                     WHERE UPPER(plate) = UPPER(v.plate)
                      ORDER BY id DESC LIMIT 1
                    ) AS last_direction
             FROM vehicles v JOIN houses h ON h.id = v.house_id
@@ -242,6 +245,29 @@ def index():
             """,
             (q_norm,),
         ).fetchone()
+
+        # Fall back to visitor plates that exist only in the movement log.
+        if not found:
+            found = db.execute(
+                """
+                SELECT m.plate AS plate,
+                       h.number AS house_number, h.floor AS house_floor,
+                       h.owner_name, h.phone, h.phone_masked,
+                       'visitor' AS kind,
+                       m2.direction AS last_direction
+                FROM movements m
+                LEFT JOIN houses h ON h.id = m.house_id
+                JOIN movements m2 ON m2.id = (
+                    SELECT MAX(id) FROM movements
+                    WHERE UPPER(plate) = ?
+                )
+                WHERE UPPER(m.plate) = ?
+                ORDER BY m.id DESC
+                LIMIT 1
+                """,
+                (q_norm, q_norm),
+            ).fetchone()
+
         not_found = found is None
     return render_template(
         "search_landing.html",

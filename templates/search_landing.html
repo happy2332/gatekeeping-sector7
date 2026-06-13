@@ -19,22 +19,29 @@
     <div class="card" style="margin-top:.8rem;background:#f0fdf4;border:1px solid #bbf7d0">
       <h2 style="margin:0 0 .4rem">
         {{ found.plate }}
+        <span class="badge badge--{{ found.kind }}" style="font-size:.7rem;vertical-align:middle">{{ found.kind }}</span>
         <span class="badge {{ 'badge--in' if inside else 'badge--out' }}"
               style="font-size:.75rem;vertical-align:middle">
           {{ 'INSIDE' if inside else 'OUTSIDE' }}
         </span>
       </h2>
       <dl class="house-info">
-        <dt>House</dt>
-        <dd>{{ found.house_number }} · {{ floor_labels.get(found.house_floor, found.house_floor) }} Floor</dd>
-        <dt>Owner</dt>
-        <dd>{{ found.owner_name }}</dd>
+        <dt>{{ 'Visiting' if found.kind == 'visitor' else 'House' }}</dt>
+        <dd>
+          {% if found.house_number %}
+            {{ found.house_number }}{% if found.house_floor %} · {{ floor_labels.get(found.house_floor, found.house_floor) }} Floor{% endif %}
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </dd>
+        <dt>{{ 'Host' if found.kind == 'visitor' else 'Owner' }}</dt>
+        <dd>{{ found.owner_name or '—' }}</dd>
         <dt>Phone</dt>
         <dd>
           {% if found.phone and phone_visible(found) %}
             <a href="tel:{{ found.phone | replace(' ', '') }}">{{ found.phone }}</a>
           {% else %}
-            <span class="muted">hidden</span>
+            <span class="muted">—</span>
           {% endif %}
         </dd>
       </dl>
