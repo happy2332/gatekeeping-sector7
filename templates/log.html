@@ -11,10 +11,11 @@
     <thead><tr>
       <th data-sort-key="date">Date</th><th data-sort-key="date">Time</th>
       <th>Vehicle</th><th>Status</th><th>Type</th><th>House</th>
-      <th>Owner</th><th data-sortable="false">Note</th>
+      <th>Owner</th><th>Phone</th>
     </tr></thead>
     <tbody>
       {% for r in rows %}
+        {% set show_phone = r.house_phone and (not r.house_phone_masked or is_guard) %}
         <tr>
           <td data-label="Date" class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_date }}</td>
           <td data-label="Time" class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_time12 }}</td>
@@ -23,7 +24,15 @@
           <td data-label="Type"><span class="badge badge--{{ r.kind }}">{{ r.kind }}</span></td>
           <td data-label="House">{% if r.house_id %}<a href="{{ url_for('house_detail', house_id=r.house_id) }}">{{ r.house_number }}{% if r.house_floor %} · {{ r.house_floor }}{% endif %}</a>{% else %}—{% endif %}</td>
           <td data-label="Owner">{{ r.house_owner or '—' }}</td>
-          <td data-label="Note" class="muted">{{ r.note or '' }}</td>
+          <td data-label="Phone" class="muted">
+            {% if show_phone %}
+              <a href="tel:{{ r.house_phone | replace(' ', '') }}">{{ r.house_phone }}</a>
+            {% elif r.house_phone %}
+              <span class="muted">hidden</span>
+            {% else %}
+              —
+            {% endif %}
+          </td>
         </tr>
       {% endfor %}
     </tbody>

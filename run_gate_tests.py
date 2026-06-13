@@ -295,7 +295,6 @@ check("normalised plate appears as DL3CAB1234 in log", "DL3CAB1234" in body)
 section("LOG VIEW")
 _, body, _ = get("/log")
 check("/log shows host house owner for visitor row", "Sharma" in body)
-check("/log shows note 'courier'", "courier" in body)
 # Date + Time columns rendered
 check("/log shows formatted Date column",
       re.search(r"\d{1,2} [A-Z][a-z]{2} \d{4}", body) is not None)
