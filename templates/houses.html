@@ -63,7 +63,7 @@
              placeholder="e.g. 633" required autocomplete="off"
              inputmode="numeric"
              min="{{ house_number_min }}" max="{{ house_number_max }}" step="1">
-      <small id="houseNumberHelp" class="muted" style="font-size:.8rem;display:none">House number must be between {{ house_number_min }} and {{ house_number_max }}.</small>
+      <small id="houseNumberHelp" style="font-size:.85rem;display:none;color:#dc2626;font-weight:500">House number must be between {{ house_number_min }} and {{ house_number_max }}.</small>
       <datalist id="houseNumbers">
         {% for n in range(house_number_min, house_number_max + 1) %}
           <option value="{{ n }}"></option>
@@ -127,21 +127,36 @@
     const NUM_MIN = {{ house_number_min }};
     const NUM_MAX = {{ house_number_max }};
 
+    // Everything below the house number stays disabled until the number is valid.
+    const dependents = [
+      floorEl, ownerEl, phoneEl,
+      ...veWrap.querySelectorAll('input[name="plate"]'),
+      addBtn, submit,
+    ];
+    function setDependentsEnabled(enabled) {
+      dependents.forEach(el => { if (el) el.disabled = !enabled; });
+      // Also disable any vehicle inputs added later — re-bind via class on wrap
+      veWrap.querySelectorAll('input[name="plate"]').forEach(el => el.disabled = !enabled);
+    }
+
     function checkNumber() {
       const v = numEl.value.trim();
       const n = parseInt(v, 10);
-      const ok = v !== '' && /^\d+$/.test(v) && n >= NUM_MIN && n <= NUM_MAX;
-      if (v === '') {
+      const valid = v !== '' && /^\d+$/.test(v) && n >= NUM_MIN && n <= NUM_MAX;
+      const empty = v === '';
+      if (empty) {
         help.style.display = 'none';
         numEl.setCustomValidity('');
-      } else if (!ok) {
+      } else if (!valid) {
         help.style.display = '';
         numEl.setCustomValidity(`House number must be between ${NUM_MIN} and ${NUM_MAX}`);
       } else {
         help.style.display = 'none';
         numEl.setCustomValidity('');
       }
-      return ok;
+      // Lock the rest of the form whenever the number isn't a valid 100..999.
+      setDependentsEnabled(valid);
+      return valid;
     }
 
     let timer = null;
@@ -207,8 +222,13 @@
       lbl.className = 'field';
       lbl.innerHTML = `<span>Vehicle ${idx}</span><input name="plate" placeholder="e.g. HR26FM8872" autocapitalize="characters">`;
       veWrap.appendChild(lbl);
-      lbl.querySelector('input').focus();
+      const newInput = lbl.querySelector('input');
+      newInput.disabled = !checkNumber();
+      newInput.focus();
     });
+
+    // Lock everything until a valid house number is entered.
+    setDependentsEnabled(false);
   })();
 </script>
 {% endblock %}

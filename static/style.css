@@ -50,6 +50,11 @@ select {
   border-radius: 8px; font-size: 1rem; background: #fff;
 }
 input:focus, select:focus { outline: 2px solid #2563eb33; border-color: #2563eb; }
+input:disabled, select:disabled, button:disabled, .btn:disabled, .link:disabled {
+  background: #f3f4f6; color: #9ca3af; cursor: not-allowed; border-color: #e5e7eb;
+}
+.field:has(input:disabled) > span,
+.field:has(select:disabled) > span { color: #9ca3af; }
 .grid { display: grid; gap: .55rem; margin-top: .4rem; }
 .house-info { display: grid; grid-template-columns: 6rem 1fr; gap: .35rem .8rem; margin: .4rem 0 0; }
 .house-info dt { color: var(--muted); font-size: .85rem; align-self: center; }
