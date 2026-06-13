@@ -290,6 +290,11 @@ def vehicles_list():
     return render_template("vehicles.html", vehicles=rows, q=q)
 
 
+@app.route("/vehicles/new")
+def vehicle_new():
+    return render_template("vehicle_new.html")
+
+
 @app.route("/houses/new", methods=["POST"])
 def house_create():
     number = validate_house_number(request.form.get("number", ""))

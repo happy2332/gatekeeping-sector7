@@ -110,8 +110,8 @@ check("resident: GET /log works without login", status == 200)
 status, _, _ = get("/vehicles")
 check("resident: GET /vehicles works without login", status == 200)
 status, body, _ = get("/vehicles")
-check("resident: 'Add a vehicle' form IS shown (residents can register)",
-      "Add a vehicle" in body)
+check("resident: '+ Add vehicle' button IS shown on /vehicles",
+      "/vehicles/new" in body and "Add vehicle" in body)
 check("resident: 'edit →' link NOT shown",
       "edit →" not in body)
 # Resident cannot post log
