@@ -263,43 +263,36 @@ def index():
 def houses_list():
     db = get_db()
     q = request.args.get("q", "").strip()
-    floor_filter = request.args.get("floor", "").strip()
-    # Special sentinel to filter for no-floor houses
-    no_floor = floor_filter == "_none_"
 
-    clauses = []
-    params = []
     if q:
         like = f"%{q.upper()}%"
-        clauses.append(
-            "h.id IN ("
-            "  SELECT h2.id FROM houses h2"
-            "   LEFT JOIN vehicles v2 ON v2.house_id = h2.id"
-            "   WHERE UPPER(h2.number) LIKE ?"
-            "      OR UPPER(h2.owner_name) LIKE ?"
-            "      OR UPPER(v2.plate) LIKE ?"
-            ")"
-        )
-        params += [like, like, like]
-    if no_floor:
-        clauses.append("h.floor IS NULL")
-    elif floor_filter:
-        clauses.append("h.floor = ?")
-        params.append(floor_filter)
-    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+        rows = db.execute(
+            """
+            SELECT h.*, COUNT(v.id) AS vehicle_count
+            FROM houses h LEFT JOIN vehicles v ON v.house_id = h.id
+            WHERE h.id IN (
+                SELECT h2.id FROM houses h2
+                LEFT JOIN vehicles v2 ON v2.house_id = h2.id
+                WHERE UPPER(h2.number) LIKE ?
+                   OR UPPER(h2.owner_name) LIKE ?
+                   OR UPPER(v2.plate) LIKE ?
+            )
+            GROUP BY h.id
+            ORDER BY h.number, h.floor
+            """,
+            (like, like, like),
+        ).fetchall()
+    else:
+        rows = db.execute(
+            """
+            SELECT h.*, COUNT(v.id) AS vehicle_count
+            FROM houses h LEFT JOIN vehicles v ON v.house_id = h.id
+            GROUP BY h.id
+            ORDER BY h.number, h.floor
+            """
+        ).fetchall()
 
-    rows = db.execute(
-        f"""
-        SELECT h.*, COUNT(v.id) AS vehicle_count
-        FROM houses h LEFT JOIN vehicles v ON v.house_id = h.id
-        {where}
-        GROUP BY h.id
-        ORDER BY h.number, h.floor
-        """,
-        params,
-    ).fetchall()
-
-    # When the user is searching, attach the matched plates per house so the
+    # When the user is searching, attach matched plates per house so the
     # Vehicles column can show the *why* of the match, not just a count.
     matched_plates = {}
     if q:
@@ -315,17 +308,7 @@ def houses_list():
         ).fetchall():
             matched_plates.setdefault(r["house_id"], []).append(r["plate"])
 
-    # Distinct floors for the filter pills (skip nulls)
-    floors = [r["floor"] for r in db.execute(
-        "SELECT DISTINCT floor FROM houses WHERE floor IS NOT NULL ORDER BY floor"
-    ).fetchall()]
-    has_floorless = db.execute(
-        "SELECT 1 FROM houses WHERE floor IS NULL LIMIT 1"
-    ).fetchone() is not None
-
     return render_template("houses.html", houses=rows, q=q,
-                           floors=floors, has_floorless=has_floorless,
-                           floor_filter=floor_filter,
                            matched_plates=matched_plates)
 
 
