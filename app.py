@@ -31,6 +31,12 @@ app.secret_key = os.environ.get("GK_SECRET") or secrets.token_hex(16)
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "admin")
 GUARD_PASSWORD = os.environ.get("GUARD_PASSWORD", "guard")
 
+# Feature flag: when False, the per-house "Hide phone from residents" toggle
+# is hidden from forms and ignored on save, and every role sees every phone
+# number. Flip to True (or set env var GK_PHONE_MASKING=1) to re-enable. The
+# schema column phone_masked is preserved either way so the data isn't lost.
+PHONE_MASKING_ENABLED = os.environ.get("GK_PHONE_MASKING", "").lower() in ("1", "true", "yes")
+
 
 def current_role():
     return session.get("role", "resident")
@@ -96,13 +102,17 @@ def filter_as_time12(value):
 @app.context_processor
 def inject_phone_helper():
     def phone_visible(house):
-        # house may be a sqlite3.Row or dict-like
+        if not PHONE_MASKING_ENABLED:
+            return True
         try:
             masked = house["phone_masked"]
         except (KeyError, IndexError):
             masked = 0
         return not masked or role_at_least("guard")
-    return {"phone_visible": phone_visible}
+    return {
+        "phone_visible": phone_visible,
+        "phone_masking_enabled": PHONE_MASKING_ENABLED,
+    }
 
 
 def get_db():
@@ -347,6 +357,8 @@ def house_detail(house_id):
             db.commit()
             flash("Vehicle removed", "ok")
         elif action == "update_house":
+            new_owner = request.form.get("owner_name", "").strip()
+            new_phone = request.form.get("phone", "").strip()
             new_floor = request.form.get("floor", "").strip() or None
             siblings = db.execute(
                 "SELECT id, floor FROM houses WHERE number = ? AND id != ?",
@@ -354,21 +366,26 @@ def house_detail(house_id):
             ).fetchall()
             sibling_has_floor = any(r["floor"] is not None for r in siblings)
             sibling_no_floor = any(r["floor"] is None for r in siblings)
-            if new_floor is None and sibling_has_floor:
+            if not new_owner:
+                flash("Owner name is required", "error")
+            elif not new_phone:
+                flash("Phone number is required", "error")
+            elif new_floor is None and sibling_has_floor:
                 flash(f"House {house['number']} has other floor entries — keep this one's floor too", "error")
             elif new_floor is not None and sibling_no_floor:
                 flash(f"House {house['number']} also has a no-floor entry — can't mix", "error")
             else:
+                # If masking is disabled, preserve whatever was previously stored
+                # rather than silently flipping it to 0 — the column still has
+                # meaning for the day we re-enable the feature.
+                phone_masked = (
+                    1 if (PHONE_MASKING_ENABLED and request.form.get("phone_masked")) else
+                    house["phone_masked"] if not PHONE_MASKING_ENABLED else 0
+                )
                 try:
                     db.execute(
                         "UPDATE houses SET owner_name = ?, phone = ?, floor = ?, phone_masked = ? WHERE id = ?",
-                        (
-                            request.form.get("owner_name", "").strip() or None,
-                            request.form.get("phone", "").strip() or None,
-                            new_floor,
-                            1 if request.form.get("phone_masked") else 0,
-                            house_id,
-                        ),
+                        (new_owner, new_phone, new_floor, phone_masked, house_id),
                     )
                     db.commit()
                     flash("House updated", "ok")
@@ -388,6 +405,10 @@ def house_create():
     number = request.form.get("number", "").strip().upper()
     if not number:
         flash("House number required", "error")
+        return redirect(url_for("houses_list"))
+    owner_name = request.form.get("owner_name", "").strip()
+    if not owner_name:
+        flash("Owner name is required", "error")
         return redirect(url_for("houses_list"))
     phone = request.form.get("phone", "").strip()
     if not phone:
@@ -411,10 +432,10 @@ def house_create():
             "INSERT INTO houses (number, owner_name, phone, floor, phone_masked) VALUES (?, ?, ?, ?, ?)",
             (
                 number,
-                request.form.get("owner_name", "").strip() or None,
+                owner_name,
                 phone,
                 floor,
-                1 if request.form.get("phone_masked") else 0,
+                1 if (PHONE_MASKING_ENABLED and request.form.get("phone_masked")) else 0,
             ),
         )
         db.commit()

@@ -31,16 +31,18 @@
     </label>
     <label class="field">
       <span>Owner name</span>
-      <input name="owner_name" placeholder="Owner name" value="{{ house.owner_name or '' }}">
+      <input name="owner_name" placeholder="Owner name" value="{{ house.owner_name or '' }}" required>
     </label>
     <label class="field">
       <span>Phone</span>
-      <input name="phone" placeholder="Phone" value="{{ house.phone or '' }}" inputmode="tel">
+      <input name="phone" placeholder="Phone" value="{{ house.phone or '' }}" inputmode="tel" required>
     </label>
-    <label class="checkbox">
-      <input type="checkbox" name="phone_masked" value="1" {% if house.phone_masked %}checked{% endif %}>
-      <span>Hide phone from residents <em>(only admin and guard can see it)</em></span>
-    </label>
+    {% if phone_masking_enabled %}
+      <label class="checkbox">
+        <input type="checkbox" name="phone_masked" value="1" {% if house.phone_masked %}checked{% endif %}>
+        <span>Hide phone from residents <em>(only admin and guard can see it)</em></span>
+      </label>
+    {% endif %}
     <button class="btn">Save</button>
   </form>
 </section>

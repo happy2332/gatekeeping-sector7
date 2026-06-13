@@ -37,7 +37,7 @@
     </tr></thead>
     <tbody>
       {% for r in rows %}
-        {% set show_phone = r.house_phone and (not r.house_phone_masked or is_guard) %}
+        {% set show_phone = r.house_phone and (not phone_masking_enabled or not r.house_phone_masked or is_guard) %}
         <tr>
           <td data-label="Date" class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_date }}</td>
           <td data-label="Time" class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_time12 }}</td>

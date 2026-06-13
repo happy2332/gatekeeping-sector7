@@ -33,7 +33,7 @@
       </tr></thead>
       <tbody>
         {% for r in inside %}
-          {% set show_phone = r.house_phone and (not r.house_phone_masked or is_guard) %}
+          {% set show_phone = r.house_phone and (not phone_masking_enabled or not r.house_phone_masked or is_guard) %}
           <tr>
             <td data-label="Vehicle"><strong>{{ r.plate }}</strong></td>
             <td data-label="Type"><span class="badge badge--{{ r.kind }}">{{ r.kind }}</span></td>
