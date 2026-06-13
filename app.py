@@ -227,6 +227,8 @@ def index():
         SELECT m.plate, m.kind, m.ts, m.house_id,
                h.number AS house_number, h.floor AS house_floor,
                h.owner_name AS house_owner,
+               h.phone AS house_phone,
+               h.phone_masked AS house_phone_masked,
                m.visitor_name
         FROM movements m
         LEFT JOIN houses h ON h.id = m.house_id
