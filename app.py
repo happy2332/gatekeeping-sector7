@@ -223,10 +223,9 @@ def index():
         where_extra = (
             "AND (UPPER(m.plate) LIKE ?"
             "  OR UPPER(h.number) LIKE ?"
-            "  OR UPPER(m.visitor_name) LIKE ?"
             "  OR UPPER(h.owner_name) LIKE ?)"
         )
-        params = [like, like, like, like]
+        params = [like, like, like]
     if kind_filter:
         where_extra += " AND m.kind = ?"
         params.append(kind_filter)
@@ -258,7 +257,18 @@ def index():
         LIMIT 20
         """
     ).fetchall()
-    return render_template("index.html", inside=inside, recent=recent, q=q, kind_filter=kind_filter)
+    inside_total = db.execute(
+        """
+        SELECT COUNT(*) AS c FROM movements
+        WHERE id IN (SELECT MAX(id) FROM movements GROUP BY plate)
+          AND direction = 'in'
+        """
+    ).fetchone()["c"]
+    return render_template(
+        "index.html",
+        inside=inside, recent=recent, q=q, kind_filter=kind_filter,
+        inside_total=inside_total,
+    )
 
 
 @app.route("/vehicles")
@@ -643,10 +653,9 @@ def log_view():
         clauses.append(
             "(UPPER(m.plate) LIKE ?"
             " OR UPPER(h.number) LIKE ?"
-            " OR UPPER(m.visitor_name) LIKE ?"
             " OR UPPER(h.owner_name) LIKE ?)"
         )
-        params += [like, like, like, like]
+        params += [like, like, like]
     if kind_filter:
         clauses.append("m.kind = ?")
         params.append(kind_filter)

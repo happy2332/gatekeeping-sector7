@@ -4,7 +4,7 @@
 <section class="card">
   <h1>Movement log</h1>
   <form method="get" class="row" style="margin:.4rem 0 .4rem">
-    <input name="q" value="{{ q }}" placeholder="Search vehicle, house, owner or visitor name">
+    <input name="q" value="{{ q }}" placeholder="Search by vehicle, house or owner">
     {% if kind_filter %}<input type="hidden" name="kind" value="{{ kind_filter }}">{% endif %}
     {% if status_filter %}<input type="hidden" name="status" value="{{ status_filter }}">{% endif %}
     <button class="btn" style="flex:0 0 auto">Search</button>

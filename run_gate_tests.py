@@ -304,11 +304,6 @@ check("/log search by plate finds row", "MH12AA1111" in body and "TEMP1234X" not
 _, body, _ = get("/log?q=201")
 check("/log search by house finds row", "MH12AA1111" in body)
 
-# Search by visitor name
-_, body, _ = get("/log?q=Amit")
-check("/log search by visitor name finds row", "UP14XY9999" in body)
-
-
 # -----------------------------------------------------------------
 section("CURRENTLY-INSIDE EDGE CASE")
 

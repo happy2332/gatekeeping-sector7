@@ -2,9 +2,13 @@
 {% block title %}Currently Inside{% endblock %}
 {% block content %}
 <section class="card">
-  <h1>Currently inside the pocket</h1>
+  <h1>Currently inside the pocket
+    <span class="badge" style="font-size:.85rem;vertical-align:middle;background:#dbeafe;color:#1e40af;border-color:#bfdbfe">
+      {{ inside_total }} vehicle{{ '' if inside_total == 1 else 's' }}
+    </span>
+  </h1>
   <form method="get" class="row" style="margin:.4rem 0 .4rem">
-    <input name="q" value="{{ q or '' }}" placeholder="Search by vehicle, house, owner or visitor name">
+    <input name="q" value="{{ q or '' }}" placeholder="Search by vehicle, house or owner">
     {% if kind_filter %}<input type="hidden" name="kind" value="{{ kind_filter }}">{% endif %}
     <button class="btn" style="flex:0 0 auto">Search</button>
     {% if q or kind_filter %}<a class="btn" style="flex:0 0 auto;background:#6b7280" href="{{ url_for('index') }}">Clear</a>{% endif %}
