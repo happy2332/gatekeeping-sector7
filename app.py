@@ -400,7 +400,6 @@ def house_detail(house_id):
 
 
 @app.route("/houses/new", methods=["POST"])
-@admin_required
 def house_create():
     number = request.form.get("number", "").strip().upper()
     if not number:
@@ -417,7 +416,52 @@ def house_create():
     floor = request.form.get("floor", "").strip() or None
     db = get_db()
 
-    existing = db.execute("SELECT floor FROM houses WHERE number = ?", (number,)).fetchall()
+    # Collect and normalise vehicle entries (form sends them as plate[] inputs).
+    raw_plates = request.form.getlist("plate")
+    plates = []  # list of (raw, normalised)
+    for raw in raw_plates:
+        norm = normalise_plate(raw)
+        if norm:
+            plates.append((raw.strip(), norm))
+
+    # Detect duplicates within the same submitted form.
+    seen = {}
+    self_dups = []
+    for raw, norm in plates:
+        if norm in seen and seen[norm] != raw:
+            self_dups.append(f"{raw} duplicates {seen[norm]} in this form")
+        else:
+            seen[norm] = raw
+    if self_dups:
+        flash("Duplicate vehicles in form: " + "; ".join(self_dups), "error")
+        return redirect(url_for("houses_list"))
+
+    # Detect plates that already belong to other houses.
+    conflicts = []
+    if plates:
+        norms = [n for _, n in plates]
+        placeholders = ",".join("?" * len(norms))
+        rows = db.execute(
+            f"""
+            SELECT v.plate AS plate, h.number AS h_num, h.floor AS h_floor,
+                   h.owner_name AS h_owner
+            FROM vehicles v JOIN houses h ON h.id = v.house_id
+            WHERE UPPER(v.plate) IN ({placeholders})
+            """,
+            norms,
+        ).fetchall()
+        for r in rows:
+            label = r["h_num"] + (f" floor {r['h_floor']}" if r["h_floor"] else "")
+            owner = r["h_owner"] or "(no owner)"
+            conflicts.append(f"{r['plate']} is already registered to {label} ({owner})")
+    if conflicts:
+        flash("Vehicle conflict: " + "; ".join(conflicts), "error")
+        return redirect(url_for("houses_list"))
+
+    # House dedup with helpful message
+    existing = db.execute(
+        "SELECT floor, owner_name FROM houses WHERE number = ?", (number,)
+    ).fetchall()
     has_with_floor = any(r["floor"] is not None for r in existing)
     has_without_floor = any(r["floor"] is None for r in existing)
     if floor is None and has_with_floor:
@@ -426,7 +470,17 @@ def house_create():
     if floor is not None and has_without_floor:
         flash(f"House {number} is already registered without a floor — remove that entry first or skip the floor field", "error")
         return redirect(url_for("houses_list"))
+    same_unit = next(
+        (r for r in existing if (r["floor"] or None) == floor),
+        None,
+    )
+    if same_unit:
+        owner = same_unit["owner_name"] or "(no owner)"
+        suffix = f" floor {floor}" if floor else ""
+        flash(f"House {number}{suffix} is already registered to {owner}", "error")
+        return redirect(url_for("houses_list"))
 
+    # All checks passed — insert the house, then the vehicles in the same txn.
     try:
         cur = db.execute(
             "INSERT INTO houses (number, owner_name, phone, floor, phone_masked) VALUES (?, ?, ?, ?, ?)",
@@ -438,14 +492,25 @@ def house_create():
                 1 if (PHONE_MASKING_ENABLED and request.form.get("phone_masked")) else 0,
             ),
         )
+        new_house_id = cur.lastrowid
+        for _, norm in plates:
+            db.execute(
+                "INSERT INTO vehicles (house_id, plate) VALUES (?, ?)",
+                (new_house_id, norm),
+            )
         db.commit()
-        return redirect(url_for("house_detail", house_id=cur.lastrowid))
-    except sqlite3.IntegrityError:
-        if floor is None:
-            flash(f"House {number} already exists", "error")
-        else:
-            flash(f"House {number} (floor {floor}) already exists", "error")
+    except sqlite3.IntegrityError as e:
+        db.rollback()
+        flash(f"Could not save house: {e}", "error")
         return redirect(url_for("houses_list"))
+
+    label = number + (f" floor {floor}" if floor else "")
+    extra = f" with {len(plates)} vehicle{'s' if len(plates) != 1 else ''}" if plates else ""
+    flash(f"Registered house {label}{extra}", "ok")
+    if role_at_least("admin"):
+        return redirect(url_for("house_detail", house_id=new_house_id))
+    # Residents can't open the detail page for editing — send them to the list
+    return redirect(url_for("houses_list"))
 
 
 @app.route("/gate")

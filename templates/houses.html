@@ -49,13 +49,13 @@
   {% endif %}
 </section>
 
-{% if is_admin %}
 <section class="card">
-  <h2>Add a house</h2>
+  <h2>Register a house</h2>
+  <p class="muted" style="margin:.2rem 0 .8rem">House details + your registered vehicles, in one go. Add as many vehicles as you need.</p>
   <form method="post" action="{{ url_for('house_create') }}" class="grid">
     <label class="field">
       <span>House number</span>
-      <input name="number" placeholder="e.g. A-104" required>
+      <input name="number" placeholder="e.g. 633" required>
     </label>
     <label class="field">
       <span>Floor <em>(optional)</em></span>
@@ -63,7 +63,7 @@
     </label>
     <label class="field">
       <span>Owner name</span>
-      <input name="owner_name" placeholder="e.g. Sharma" required>
+      <input name="owner_name" placeholder="e.g. Mukesh Gupta" required>
     </label>
     <label class="field">
       <span>Phone</span>
@@ -75,8 +75,31 @@
         <span>Hide phone from residents <em>(only admin and guard can see it)</em></span>
       </label>
     {% endif %}
-    <button class="btn">Add house</button>
+
+    <div id="vehicleFields" class="grid" style="margin-top:.4rem">
+      <label class="field">
+        <span>Vehicle 1</span>
+        <input name="plate" placeholder="e.g. DL3CAB1234" autocapitalize="characters">
+      </label>
+    </div>
+    <button type="button" id="addVehicleBtn" class="link" style="text-align:left">+ Add another vehicle</button>
+
+    <button class="btn">Register house</button>
   </form>
 </section>
-{% endif %}
+<script>
+  (function () {
+    const btn = document.getElementById('addVehicleBtn');
+    const wrap = document.getElementById('vehicleFields');
+    if (!btn || !wrap) return;
+    btn.addEventListener('click', () => {
+      const idx = wrap.querySelectorAll('input[name="plate"]').length + 1;
+      const lbl = document.createElement('label');
+      lbl.className = 'field';
+      lbl.innerHTML = `<span>Vehicle ${idx}</span><input name="plate" placeholder="e.g. DL3CAB1234" autocapitalize="characters">`;
+      wrap.appendChild(lbl);
+      lbl.querySelector('input').focus();
+    });
+  })();
+</script>
 {% endblock %}

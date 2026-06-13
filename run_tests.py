@@ -100,7 +100,7 @@ check("add house with all fields — floor visible",
       "expected floor=1 column for A-102")
 
 _, body, _ = post("/houses/new", {"number": "A-101", "phone": "9000000099", "owner_name": "Dup"})
-check("duplicate house number rejected", "already exists" in body.lower())
+check("duplicate house number rejected", "already registered" in body.lower())
 
 # 3b. Same number with different floor — allowed (multi-floor houses)
 _, body, _ = post("/houses/new", {"number": "F-601", "floor": "Ground", "owner_name": "Mehta", "phone": "9000000010"})
@@ -113,7 +113,7 @@ check("multi-floor: F-601 2 present", re.search(r"F-601.*?Roy", html, re.S) is n
 
 # 3c. Same number + same floor → rejected
 _, body, _ = post("/houses/new", {"number": "F-601", "floor": "1", "phone": "9000000099", "owner_name": "Dup"})
-check("same number + same floor rejected", "already exists" in body.lower())
+check("same number + same floor rejected", "already registered" in body.lower())
 
 # 3d. Cannot mix floored and floor-less entries for the same number
 _, body, _ = post("/houses/new", {"number": "F-601", "phone": "9000000099", "owner_name": "Mix"})
