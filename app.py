@@ -733,6 +733,113 @@ def admin():
     return render_template("admin.html", stats=stats)
 
 
+@app.route("/admin/vehicles/<int:vehicle_id>/edit", methods=["GET", "POST"])
+@admin_required
+def admin_edit_vehicle(vehicle_id):
+    db = get_db()
+    row = db.execute(
+        """
+        SELECT v.id AS vehicle_id, v.plate, v.house_id,
+               h.number AS house_number, h.floor AS house_floor,
+               h.owner_name, h.phone
+        FROM vehicles v JOIN houses h ON h.id = v.house_id
+        WHERE v.id = ?
+        """,
+        (vehicle_id,),
+    ).fetchone()
+    if not row:
+        flash("Vehicle not found", "error")
+        return redirect(url_for("vehicles_list"))
+
+    if request.method == "POST":
+        new_plate = normalise_plate(request.form.get("plate", ""))
+        new_owner = request.form.get("owner_name", "").strip()
+        new_phone = request.form.get("phone", "").strip()
+        new_number = validate_house_number(request.form.get("number", ""))
+        new_floor = validate_floor(request.form.get("floor", ""))
+
+        # Validations
+        if not new_plate:
+            flash("Vehicle number is required", "error")
+            return redirect(url_for("admin_edit_vehicle", vehicle_id=vehicle_id))
+        if not new_owner:
+            flash("Owner name is required", "error")
+            return redirect(url_for("admin_edit_vehicle", vehicle_id=vehicle_id))
+        if not new_phone:
+            flash("Phone number is required", "error")
+            return redirect(url_for("admin_edit_vehicle", vehicle_id=vehicle_id))
+        if new_number is None:
+            flash(f"House number must be between {HOUSE_NUMBER_MIN} and {HOUSE_NUMBER_MAX}", "error")
+            return redirect(url_for("admin_edit_vehicle", vehicle_id=vehicle_id))
+        if new_floor is None:
+            flash("Please pick a floor", "error")
+            return redirect(url_for("admin_edit_vehicle", vehicle_id=vehicle_id))
+
+        # Plate uniqueness (skip self)
+        if new_plate != row["plate"]:
+            clash = db.execute(
+                "SELECT v.plate, h.number, h.floor FROM vehicles v "
+                "JOIN houses h ON h.id = v.house_id "
+                "WHERE UPPER(v.plate) = UPPER(?) AND v.id != ?",
+                (new_plate, vehicle_id),
+            ).fetchone()
+            if clash:
+                fl = FLOOR_LABELS.get(clash["floor"], clash["floor"]) if clash["floor"] else ""
+                host = f"{clash['number']} ({fl})" if fl else clash["number"]
+                flash(f"Vehicle {new_plate} is already registered to {host}", "error")
+                return redirect(url_for("admin_edit_vehicle", vehicle_id=vehicle_id))
+
+        # Resolve target house: existing (number, floor) → reuse; else create new.
+        target_house = db.execute(
+            "SELECT id FROM houses WHERE number = ? AND floor = ?",
+            (new_number, new_floor),
+        ).fetchone()
+        old_house_id = row["house_id"]
+        if target_house:
+            target_house_id = target_house["id"]
+            # Update owner+phone on the target (admin's edit is authoritative)
+            db.execute(
+                "UPDATE houses SET owner_name = ?, phone = ? WHERE id = ?",
+                (new_owner, new_phone, target_house_id),
+            )
+        else:
+            cur = db.execute(
+                "INSERT INTO houses (number, owner_name, phone, floor) VALUES (?, ?, ?, ?)",
+                (new_number, new_owner, new_phone, new_floor),
+            )
+            target_house_id = cur.lastrowid
+
+        # Move + rename the vehicle.
+        db.execute(
+            "UPDATE vehicles SET house_id = ?, plate = ? WHERE id = ?",
+            (target_house_id, new_plate, vehicle_id),
+        )
+
+        # If the vehicle was renamed, sync any movement-log rows so the log
+        # still searches and displays the new plate.
+        if new_plate != row["plate"]:
+            db.execute(
+                "UPDATE movements SET plate = ? WHERE plate = ?",
+                (new_plate, row["plate"]),
+            )
+
+        # Movement rows still point at old_house_id (kept as-is, history fact).
+        # If old house has no remaining vehicles, drop it.
+        if old_house_id != target_house_id:
+            remaining = db.execute(
+                "SELECT COUNT(*) c FROM vehicles WHERE house_id = ?",
+                (old_house_id,),
+            ).fetchone()["c"]
+            if remaining == 0:
+                db.execute("DELETE FROM houses WHERE id = ?", (old_house_id,))
+
+        db.commit()
+        flash(f"Updated vehicle {new_plate}", "ok")
+        return redirect(url_for("vehicles_list"))
+
+    return render_template("vehicle_edit.html", v=row)
+
+
 @app.post("/admin/vehicles/<int:vehicle_id>/delete")
 @admin_required
 def admin_delete_vehicle(vehicle_id):

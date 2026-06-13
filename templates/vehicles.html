@@ -34,8 +34,11 @@
             {% endif %}
           </td>
           {% if is_admin %}
-            <td data-label="">
+            <td data-label="" style="white-space:nowrap">
+              <a class="link" href="{{ url_for('admin_edit_vehicle', vehicle_id=v.vehicle_id) }}">edit</a>
+              &nbsp;·&nbsp;
               <form method="post" action="{{ url_for('admin_delete_vehicle', vehicle_id=v.vehicle_id) }}"
+                    style="display:inline"
                     onsubmit="return confirm('Remove vehicle {{ v.plate }} from house {{ v.house_number }}?')">
                 <button class="link link--danger">remove</button>
               </form>

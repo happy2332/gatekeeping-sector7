@@ -159,6 +159,14 @@ input:disabled, select:disabled, button:disabled, .btn:disabled, .link:disabled 
    <table class="data"> via a parent <div class="table-wrap">. */
 .card > .table-wrap,
 .card .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -.4rem; }
+
+/* Mobile-only "Sort by..." dropdown injected by sortable.js. Hidden on
+   desktop (where the regular column-header click is preferred). */
+.mobile-sort { display: none; }
+.mobile-sort label { display: flex; align-items: center; gap: .55rem; margin: .2rem 0 .6rem; }
+.mobile-sort label > span { font-size: .8rem; color: var(--muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: .03em; flex: 0 0 auto; }
+.mobile-sort select { flex: 1 1 auto; padding: .5rem .7rem; font-size: .95rem; }
 table.data { width: 100%; min-width: max-content; border-collapse: collapse; font-size: .95rem; }
 .card > .table-wrap > table.data { min-width: 100%; }
 table.data th, table.data td { text-align: left; padding: .6rem .45rem; border-bottom: 1px solid var(--line); }
@@ -186,6 +194,7 @@ table.data th[aria-sort="descending"]::after { content: "▼"; opacity: 1; color
   .card > .table-wrap,
   .card .table-wrap { overflow: visible; margin: 0; }
   table.data { min-width: 0; }
+  .mobile-sort { display: block; }
 
   /* Data tables become a vertical stack of "cards" so all fields are visible
      without horizontal scrolling. The column header for each cell is shown
