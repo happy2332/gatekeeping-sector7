@@ -1,14 +1,18 @@
 :root {
-  --bg: #f4f5f7;
+  --bg: #f6f7fb;
   --card: #fff;
-  --ink: #1a1a1a;
+  --ink: #0f172a;
   --muted: #6b7280;
   --line: #e5e7eb;
+  --brand: #4f46e5;
+  --brand-2: #7c3aed;
   --in: #16a34a;
   --out: #dc2626;
   --visitor: #d97706;
   --resident: #2563eb;
   --unknown: #6b7280;
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, .04), 0 1px 3px rgba(15, 23, 42, .06);
+  --shadow-md: 0 4px 12px rgba(15, 23, 42, .06), 0 2px 4px rgba(15, 23, 42, .04);
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
@@ -21,24 +25,38 @@ body {
 }
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  background: #111827; color: #fff; padding: .8rem 1rem;
+  background: linear-gradient(135deg, #1e293b 0%, #312e81 60%, #4338ca 100%);
+  color: #fff; padding: .85rem 1rem;
   position: sticky; top: 0; z-index: 5;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, .25);
 }
-.topbar .brand { color: #fff; text-decoration: none; font-weight: 600; }
+.topbar .brand {
+  color: #fff; text-decoration: none; font-weight: 700;
+  letter-spacing: .2px; display: inline-flex; align-items: center; gap: .5rem;
+}
+.topbar .brand::before {
+  content: ""; width: 1.4rem; height: 1.4rem; border-radius: 6px;
+  background: linear-gradient(135deg, #fbbf24, #f97316);
+  box-shadow: inset 0 -1px 0 rgba(0,0,0,.2), 0 1px 2px rgba(0,0,0,.2);
+  flex: 0 0 auto;
+}
 .topbar nav { display: flex; align-items: center; gap: 1rem; }
 .topbar nav a {
-  color: #d1d5db; text-decoration: none; font-size: .95rem;
+  color: #e0e7ff; text-decoration: none; font-size: .95rem;
+  transition: color .15s ease;
 }
 .topbar nav a:hover { color: #fff; }
-.topbar nav form { margin: 0; padding-left: 1rem; border-left: 1px solid #374151; }
+.topbar nav form { margin: 0; padding-left: 1rem; border-left: 1px solid rgba(255,255,255,.15); }
 .topbar nav form button { padding: 0; }
 main { max-width: 720px; margin: 0 auto; padding: 1rem; }
 .card {
-  background: var(--card); border-radius: 12px; padding: 1.1rem;
-  box-shadow: 0 1px 2px rgba(0,0,0,.04); margin-bottom: 1rem;
+  background: var(--card); border-radius: 14px; padding: 1.15rem 1.2rem;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(15, 23, 42, .04);
+  margin-bottom: 1rem;
 }
-h1 { margin: 0 0 .25rem; font-size: 1.4rem; }
-h2 { margin: 1rem 0 .5rem; font-size: 1.15rem; }
+h1 { margin: 0 0 .35rem; font-size: 1.45rem; letter-spacing: -0.01em; }
+h2 { margin: 1rem 0 .5rem; font-size: 1.15rem; letter-spacing: -0.01em; }
 h3 { margin: 1rem 0 .4rem; font-size: 1rem; }
 .muted { color: var(--muted); }
 .hidden { display: none !important; }
@@ -75,16 +93,24 @@ input:disabled, select:disabled, button:disabled, .btn:disabled, .link:disabled 
   border: 1px solid var(--line); background: #fff; color: var(--ink);
   text-decoration: none; font-size: .85rem; font-weight: 500;
 }
-.pills > a.active { background: #111827; color: #fff; border-color: #111827; }
+.pills > a.active {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  color: #fff; border-color: transparent; box-shadow: var(--shadow-sm);
+}
 .pills .label { color: var(--muted); align-self: center; font-size: .8rem;
   text-transform: uppercase; letter-spacing: .03em; padding-right: .25rem; }
 .btn {
-  padding: .8rem 1rem; border: 0; border-radius: 8px; background: #111827;
+  padding: .8rem 1rem; border: 0; border-radius: 9px;
+  background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
   color: #fff; font-weight: 600; font-size: 1rem; cursor: pointer; flex: 1 1 auto;
+  box-shadow: var(--shadow-sm);
+  transition: transform .08s ease, box-shadow .15s ease, background .15s ease;
 }
-.btn--in  { background: var(--in);  }
-.btn--out { background: var(--out); }
-.btn:disabled { opacity: .35; cursor: not-allowed; }
+.btn:hover { box-shadow: var(--shadow-md); }
+.btn:active { transform: translateY(1px); box-shadow: var(--shadow-sm); }
+.btn--in  { background: linear-gradient(180deg, #16a34a 0%, #15803d 100%); }
+.btn--out { background: linear-gradient(180deg, #dc2626 0%, #b91c1c 100%); }
+.btn:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
 .link {
   background: none; border: 0; color: #2563eb; cursor: pointer;
   font-size: .95rem; padding: 0; text-decoration: underline;
@@ -107,15 +133,16 @@ input:disabled, select:disabled, button:disabled, .btn:disabled, .link:disabled 
 }
 .vehicle.is-in { background: #f0fdf4; border-color: #bbf7d0; }
 .badge {
-  display: inline-block; padding: .15rem .5rem; border-radius: 999px;
-  font-size: .75rem; font-weight: 600; text-transform: uppercase;
+  display: inline-block; padding: .15rem .55rem; border-radius: 999px;
+  font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em;
   background: #e5e7eb; color: #374151; margin-left: .35rem;
+  border: 1px solid transparent;
 }
-.badge--in       { background:#dcfce7; color:#166534; }
-.badge--out      { background:#fee2e2; color:#991b1b; }
-.badge--resident { background:#dbeafe; color:#1e40af; }
-.badge--visitor  { background:#fef3c7; color:#92400e; }
-.badge--unknown  { background:#e5e7eb; color:#374151; }
+.badge--in       { background:#dcfce7; color:#166534; border-color:#bbf7d0; }
+.badge--out      { background:#fee2e2; color:#991b1b; border-color:#fecaca; }
+.badge--resident { background:#dbeafe; color:#1e40af; border-color:#bfdbfe; }
+.badge--visitor  { background:#fef3c7; color:#92400e; border-color:#fde68a; }
+.badge--unknown  { background:#e5e7eb; color:#374151; border-color:#d1d5db; }
 .flash {
   padding: .6rem .9rem; border-radius: 8px; margin: 0 0 .8rem;
   background: #ecfeff; color: #155e75; border: 1px solid #a5f3fc;
@@ -128,8 +155,10 @@ input:disabled, select:disabled, button:disabled, .btn:disabled, .link:disabled 
 }
 .toast--bad { background: var(--out); }
 table.data { width: 100%; border-collapse: collapse; font-size: .95rem; }
-table.data th, table.data td { text-align: left; padding: .55rem .4rem; border-bottom: 1px solid var(--line); }
-table.data th { font-size: .75rem; text-transform: uppercase; color: var(--muted); letter-spacing: .03em; }
+table.data th, table.data td { text-align: left; padding: .6rem .45rem; border-bottom: 1px solid var(--line); }
+table.data th { font-size: .72rem; text-transform: uppercase; color: var(--muted); letter-spacing: .05em; font-weight: 700; }
+table.data tbody tr { transition: background .12s ease; }
+table.data tbody tr:hover { background: #f9fafb; }
 table.data th.sortable-th { cursor: pointer; user-select: none; position: relative; padding-right: 1.1rem; }
 table.data th.sortable-th::after {
   content: "⇅"; position: absolute; right: .35rem; top: 50%;
