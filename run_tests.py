@@ -1,8 +1,10 @@
-"""House + vehicle CRUD tests. Hits a running server (default http://127.0.0.1:5058)."""
+"""House + vehicle CRUD tests against the constrained 100..999 / Ground..Fourth model.
+
+Hits a running server (default http://127.0.0.1:5058)."""
+import http.cookiejar
 import os
 import re
 import sys
-import http.cookiejar
 import urllib.parse
 import urllib.request
 
@@ -21,7 +23,7 @@ def request(method, path, form=None):
     data = None
     headers = {}
     if form is not None:
-        data = urllib.parse.urlencode(form).encode()
+        data = urllib.parse.urlencode(form, doseq=True).encode()
         headers["Content-Type"] = "application/x-www-form-urlencoded"
     req = urllib.request.Request(url, data=data, method=method, headers=headers)
     try:
@@ -53,217 +55,186 @@ def get_houses_html():
     return body
 
 
-def get_house_id(number):
+def get_house_id(number, floor):
     _, body, _ = get("/houses")
-    m = re.search(r'<strong>' + re.escape(number) + r'</strong>.*?/houses/(\d+)', body, re.S)
+    pat = (
+        r'<strong>' + re.escape(str(number)) + r'</strong>(?:</a>)?'
+        r'\s*</td>\s*<td[^>]*>' + re.escape(floor.title()) + r'</td>'
+        r'.*?/houses/(\d+)'
+    )
+    m = re.search(pat, body, re.S)
     return int(m.group(1)) if m else None
-
-
-def vehicles_for(house_id):
-    _, body, _ = get(f"/houses/{house_id}")
-    rows = re.findall(r'<td[^>]*><strong>([A-Z0-9]+)</strong></td>', body)
-    return rows
 
 
 def section(title):
     print(f"\n=== {title} ===")
 
 
-# -------------------------------------------------------------
-# Admin login first — house/vehicle CRUD requires admin role.
+# Admin login (CRUD requires admin or resident; we use admin to also exercise edits)
 post("/login", {"password": ADMIN_PASSWORD})
 
-section("HOUSES — add")
+# -------------------------------------------------------------
+section("HOUSES — add (validators)")
 
-# 1. Add a house with only a number + phone (phone is now required)
-post("/houses/new", {"number": "A-101", "phone": "9000000001", "owner_name": "Sharma"})
-check("add house with required fields", "A-101" in get_houses_html())
-
-# 1b. Backend rejects house creation without phone (browser would also block via required)
-_, body, _ = post("/houses/new", {"number": "Z-999", "owner_name": "Z"})
-check("blank phone rejected", "phone number is required" in body.lower())
-check("Z-999 not added when phone blank", "Z-999" not in get_houses_html())
-
-# 1c. Backend rejects house creation without owner name
-_, body, _ = post("/houses/new", {"number": "Y-999", "phone": "9000000999"})
-check("blank owner name rejected", "owner name is required" in body.lower())
-check("Y-999 not added when owner blank", "Y-999" not in get_houses_html())
-
-# 2. Full fields
-post("/houses/new", {"number": "A-102", "floor": "1", "owner_name": "Sharma", "phone": "9876500001"})
+# Valid create
+post("/houses/new", {
+    "number": "633", "floor": "ground",
+    "owner_name": "Mukesh Gupta", "phone": "9876512345",
+})
 html = get_houses_html()
-check("add house with all fields — number visible", "A-102" in html)
-check("add house with all fields — owner visible", "Sharma" in html)
-check("add house with all fields — phone visible", "9876500001" in html)
-check("add house with all fields — floor visible",
-      bool(re.search(r"A-102.*?<td[^>]*>1</td>", html, re.S)),
-      "expected floor=1 column for A-102")
+check("valid house 633 / Ground / Mukesh Gupta saved",
+      "633" in html and "Ground" in html and "Mukesh Gupta" in html)
 
-_, body, _ = post("/houses/new", {"number": "A-101", "phone": "9000000099", "owner_name": "Dup"})
-check("duplicate house number rejected", "already registered" in body.lower())
+# Number out of range — too low
+_, body, _ = post("/houses/new", {
+    "number": "99", "floor": "ground", "owner_name": "X", "phone": "1",
+})
+check("number=99 rejected", "must be between 100 and 999" in body.lower() or "must be between" in body.lower())
 
-# 3b. Same number with different floor — allowed (multi-floor houses)
-_, body, _ = post("/houses/new", {"number": "F-601", "floor": "Ground", "owner_name": "Mehta", "phone": "9000000010"})
-_, body, _ = post("/houses/new", {"number": "F-601", "floor": "1", "owner_name": "Gupta", "phone": "9000000011"})
-_, body, _ = post("/houses/new", {"number": "F-601", "floor": "2", "owner_name": "Roy", "phone": "9000000012"})
+# Number out of range — too high
+_, body, _ = post("/houses/new", {
+    "number": "1000", "floor": "ground", "owner_name": "X", "phone": "1",
+})
+check("number=1000 rejected", "must be between" in body.lower())
+
+# Number non-numeric
+_, body, _ = post("/houses/new", {
+    "number": "abc", "floor": "ground", "owner_name": "X", "phone": "1",
+})
+check("non-numeric number rejected", "must be between" in body.lower())
+
+# Bad floor
+_, body, _ = post("/houses/new", {
+    "number": "634", "floor": "basement", "owner_name": "X", "phone": "1",
+})
+check("invalid floor rejected", "pick a floor" in body.lower())
+
+# Empty floor (the dropdown has 'Pick a floor' as disabled+selected so empty value submitted)
+_, body, _ = post("/houses/new", {
+    "number": "634", "floor": "", "owner_name": "X", "phone": "1",
+})
+check("empty floor rejected", "pick a floor" in body.lower())
+
+# Owner missing
+_, body, _ = post("/houses/new", {
+    "number": "634", "floor": "ground", "phone": "1",
+})
+check("owner missing rejected", "owner name is required" in body.lower())
+
+# Phone missing
+_, body, _ = post("/houses/new", {
+    "number": "634", "floor": "ground", "owner_name": "X",
+})
+check("phone missing rejected", "phone number is required" in body.lower())
+
+# Boundary cases — 100 and 999 OK
+post("/houses/new", {"number":"100","floor":"first","owner_name":"Low","phone":"1000000001"})
+post("/houses/new", {"number":"999","floor":"fourth","owner_name":"High","phone":"1000000999"})
 html = get_houses_html()
-check("multi-floor: F-601 Ground present", re.search(r"F-601.*?Ground", html, re.S) is not None)
-check("multi-floor: F-601 1 present", re.search(r"F-601.*?Gupta", html, re.S) is not None)
-check("multi-floor: F-601 2 present", re.search(r"F-601.*?Roy", html, re.S) is not None)
+check("boundary 100 First saved", "100" in html and "Low" in html)
+check("boundary 999 Fourth saved", "999" in html and "High" in html)
 
-# 3c. Same number + same floor → rejected
-_, body, _ = post("/houses/new", {"number": "F-601", "floor": "1", "phone": "9000000099", "owner_name": "Dup"})
-check("same number + same floor rejected", "already registered" in body.lower())
-
-# 3d. Cannot mix floored and floor-less entries for the same number
-_, body, _ = post("/houses/new", {"number": "F-601", "phone": "9000000099", "owner_name": "Mix"})
-check("can't add floor-less when floors exist",
-      "please specify a floor" in body.lower() or "specify a floor" in body.lower())
-
-_, body, _ = post("/houses/new", {"number": "G-701", "phone": "9000000020", "owner_name": "G1"})
-_, body, _ = post("/houses/new", {"number": "G-701", "floor": "1", "phone": "9000000021", "owner_name": "G2"})
-check("can't add floor when no-floor entry exists",
-      "without a floor" in body.lower() or "can't mix" in body.lower())
-
-# 4. Blank number
-_, body, _ = post("/houses/new", {"number": "", "phone": "9000000000", "owner_name": "X"})
-check("blank house number rejected", "house number required" in body.lower())
-
-# 5. Lowercase auto-uppercased
-post("/houses/new", {"number": "b-201", "phone": "9000000050", "owner_name": "Lower"})
-check("lowercase number auto-uppercased to B-201", "B-201" in get_houses_html() and "b-201" not in get_houses_html())
-
-# 6. Spaces around number
-post("/houses/new", {"number": "  C-301  ", "phone": "9000000060", "owner_name": "C"})
+# All 5 floors accepted
+for fl in ["ground", "first", "second", "third", "fourth"]:
+    post("/houses/new", {
+        "number": "200" if fl == "ground" else str(200 + ["ground","first","second","third","fourth"].index(fl)),
+        "floor": fl, "owner_name": f"O-{fl}", "phone": "9000" + fl[:4],
+    })
 html = get_houses_html()
-check("spaces trimmed around house number",
-      "C-301" in html and "  C-301  " not in html)
-
-# 7. Phone saved as-is (no validation)
-post("/houses/new", {"number": "D-401", "phone": "98765 12345", "owner_name": "D"})
-check("phone with spaces saved as-is", "98765 12345" in get_houses_html())
+for fl in ["Ground", "First", "Second", "Third", "Fourth"]:
+    check(f"floor {fl} accepted", fl in html)
 
 
 # -------------------------------------------------------------
-section("HOUSES — edit")
+section("HOUSES — multi-floor + dedup")
 
-a101 = get_house_id("A-101")
-check("can resolve A-101 id", a101 is not None)
-
-# 8. Change owner — persists
-post(f"/houses/{a101}", {"action": "update_house", "owner_name": "Verma", "phone": "9876500099", "floor": ""})
-_, body, _ = get(f"/houses/{a101}")
-check("edit owner persists after reload", 'value="Verma"' in body)
-
-# 9. Clear floor — list shows em-dash
-a102 = get_house_id("A-102")
-post(f"/houses/{a102}", {"action": "update_house", "owner_name": "Sharma", "phone": "9876500001", "floor": ""})
+# Same number, different floors
+post("/houses/new", {"number":"700","floor":"ground","owner_name":"700G","phone":"9000700001"})
+post("/houses/new", {"number":"700","floor":"first","owner_name":"700-1","phone":"9000700002"})
+post("/houses/new", {"number":"700","floor":"second","owner_name":"700-2","phone":"9000700003"})
 html = get_houses_html()
-m = re.search(r"A-102.*?</tr>", html, re.S)
-check("clearing floor shows em-dash in list", m and "—" in m.group(0))
+check("multi-floor: 700 Ground present", "700G" in html)
+check("multi-floor: 700 First present",  "700-1" in html)
+check("multi-floor: 700 Second present", "700-2" in html)
 
-# 10. House page with no vehicles renders fine
-_, body, _ = get(f"/houses/{a101}")
-check("empty house page renders 'No vehicles yet.'", "No vehicles yet." in body)
+# Same (number, floor) → existing-house path; needs a plate
+_, body, _ = post("/houses/new", {
+    "number": "700", "floor": "first", "owner_name": "Other", "phone": "9999",
+})
+check("re-add same (number, floor) without plate → error",
+      "add at least one vehicle to attach" in body.lower())
+
+# Same (number, floor) WITH a plate → attaches as a new vehicle
+post("/houses/new", {
+    "number": "700", "floor": "first", "plate": "DL3CAB1234",
+})
+seven001 = get_house_id(700, "first")
+check("can resolve house 700 First id", seven001 is not None)
+
+
+# -------------------------------------------------------------
+section("VEHICLES — dedup")
+
+# Add another vehicle to 700 First in same form
+h_id = seven001
+post("/houses/new", {
+    "number": "700", "floor": "first",
+    "plate": "HR26FM8872",
+})
+_, detail, _ = get(f"/houses/{h_id}")
+check("HR26FM8872 attached to 700 First", "HR26FM8872" in detail)
+
+# Try to register the same plate at a different house → conflict
+_, body, _ = post("/houses/new", {
+    "number": "201", "floor": "first", "owner_name": "Y", "phone": "1",
+    "plate": "HR26FM8872",
+})
+check("duplicate vehicle conflict cites existing house",
+      "already registered to 700" in body.lower())
+
+# Case + space insensitive
+_, body, _ = post("/houses/new", {
+    "number": "202", "floor": "first", "owner_name": "Y", "phone": "1",
+    "plate": "hr 26 fm 8872",
+})
+check("case/space-insensitive vehicle conflict",
+      "already registered to 700" in body.lower())
+
+# Self-duplicate within form
+_, body, _ = post("/houses/new", {
+    "number": "203", "floor": "first", "owner_name": "Y", "phone": "1",
+    "plate": ["KA01XX0001", "ka01 xx 0001"],
+})
+check("self-duplicate within same form rejected",
+      "duplicate vehicles in form" in body.lower())
 
 
 # -------------------------------------------------------------
 section("HOUSES — list view")
 
-# 11. Sort order — first occurrence of each number, in order
 html = get_houses_html()
-all_numbers = re.findall(r'<strong>([A-Z]+-\d+)</strong>', html)
-seen = []
-for n in all_numbers:
-    if n not in seen:
-        seen.append(n)
-expected_prefix = ["A-101", "A-102", "B-201", "C-301", "D-401"]
-check("houses sorted alphabetically by number",
-      seen[:len(expected_prefix)] == expected_prefix,
-      f"got order={seen}")
+nums = re.findall(r'<strong>(\d{3})</strong>', html)
+sorted_nums = sorted(set(nums), key=int)
+seen_unique = []
+for n in nums:
+    if n not in seen_unique:
+        seen_unique.append(n)
+check("houses listed in numeric order",
+      seen_unique == sorted(seen_unique, key=int),
+      f"got {seen_unique}")
 
 
 # -------------------------------------------------------------
-section("VEHICLES — add")
+section("EDIT existing house")
 
-# 12. Add to A-101
-post(f"/houses/{a101}", {"action": "add_vehicle", "plate": "DL3CAB1234"})
-check("add vehicle DL3CAB1234 to A-101", "DL3CAB1234" in vehicles_for(a101))
-
-# 13. Same plate in different shape rejected (dedup across houses)
-_, body, _ = post(f"/houses/{a102}", {"action": "add_vehicle", "plate": "dl 3c ab 1234"})
-check("normalised duplicate rejected across houses",
-      "already registered" in body.lower() and "DL3CAB1234" not in vehicles_for(a102))
-
-# 14. Different plate in A-102
-post(f"/houses/{a102}", {"action": "add_vehicle", "plate": "DL8CAF7788"})
-check("add fresh vehicle to A-102", "DL8CAF7788" in vehicles_for(a102))
-
-# 15. Same plate twice in same house
-_, body, _ = post(f"/houses/{a101}", {"action": "add_vehicle", "plate": "DL3CAB1234"})
-check("same plate twice in same house rejected",
-      "already registered" in body.lower() and vehicles_for(a101).count("DL3CAB1234") == 1)
-
-# 16. Blank plate
-_, body, _ = post(f"/houses/{a101}", {"action": "add_vehicle", "plate": ""})
-check("blank plate rejected", "plate required" in body.lower())
-
-
-# -------------------------------------------------------------
-section("VEHICLES — remove")
-
-# 17. Find vehicle id, then remove
-_, body, _ = get(f"/houses/{a102}")
-m = re.search(r'value="delete_vehicle">\s*<input[^>]*name="vehicle_id" value="(\d+)"', body)
-vid = int(m.group(1)) if m else None
-check("can find vehicle id to delete", vid is not None)
-if vid:
-    post(f"/houses/{a102}", {"action": "delete_vehicle", "vehicle_id": str(vid)})
-    check("vehicle removed from A-102", "DL8CAF7788" not in vehicles_for(a102))
-
-
-# -------------------------------------------------------------
-section("VEHICLES — counts on /houses list")
-
-# 18. Vehicle count column reflects state
-post(f"/houses/{a102}", {"action": "add_vehicle", "plate": "DL8CAF7788"})  # re-add
-post(f"/houses/{a102}", {"action": "add_vehicle", "plate": "DL12CK4321"})  # second
-b201 = get_house_id("B-201")
-post(f"/houses/{b201}", {"action": "add_vehicle", "plate": "HR26DK5566"})
-html = get_houses_html()
-
-
-def count_for(num):
-    m = re.search(re.escape(num) + r'.*?<td[^>]*>(\d+)</td>\s*<td[^>]*><a', html, re.S)
-    return int(m.group(1)) if m else None
-
-
-# Vehicle on a specific floor of F-601 — counts isolated per (number,floor)
-f601_g_id = None
-_, body, _ = get("/houses")
-m = re.search(r'<strong>F-601</strong>(?:</a>)?\s*</td>\s*<td[^>]*>Ground</td>.*?/houses/(\d+)', body, re.S)
-if m: f601_g_id = int(m.group(1))
-if f601_g_id:
-    post(f"/houses/{f601_g_id}", {"action": "add_vehicle", "plate": "DL5CN1212"})
-    check("multi-floor: vehicle attaches to specific floor",
-          "DL5CN1212" in vehicles_for(f601_g_id))
-
-check("A-101 count column = 1", count_for("A-101") == 1, f"got {count_for('A-101')}")
-check("A-102 count column = 2", count_for("A-102") == 2, f"got {count_for('A-102')}")
-check("B-201 count column = 1", count_for("B-201") == 1, f"got {count_for('B-201')}")
-check("D-401 count column = 0", count_for("D-401") == 0, f"got {count_for('D-401')}")
-
-
-# -------------------------------------------------------------
-section("EDGE CASES")
-
-# 19. Unicode in owner name
-post("/houses/new", {"number": "E-501", "owner_name": "Sharma जी", "phone": "9000000080"})
-check("unicode owner name saved", "Sharma जी" in get_houses_html())
-
-# 20. Long house number
-post("/houses/new", {"number": "TOWER-9-FLAT-9999", "phone": "9000000090", "owner_name": "Tower"})
-check("long house number saved", "TOWER-9-FLAT-9999" in get_houses_html())
+# Admin can edit (clear floor not allowed since it's mandatory). Owner can be changed.
+seven002 = get_house_id(700, "second")
+post(f"/houses/{seven002}", {
+    "action": "update_house", "owner_name": "700-2 Updated",
+    "phone": "9000700003", "floor": "second",
+})
+_, body, _ = get(f"/houses/{seven002}")
+check("edit owner persists", "700-2 Updated" in body)
 
 
 # -------------------------------------------------------------

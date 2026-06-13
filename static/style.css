@@ -43,11 +43,13 @@ h3 { margin: 1rem 0 .4rem; font-size: 1rem; }
 .muted { color: var(--muted); }
 .hidden { display: none !important; }
 .big-label { display:block; font-weight:600; margin: .5rem 0 .25rem; }
-input[type="text"], input[type="search"], input[type="tel"], input:not([type]) {
+input[type="text"], input[type="search"], input[type="tel"],
+input[type="number"], input[type="password"], input:not([type]),
+select {
   width: 100%; padding: .7rem .8rem; border: 1px solid var(--line);
   border-radius: 8px; font-size: 1rem; background: #fff;
 }
-input:focus { outline: 2px solid #2563eb33; border-color: #2563eb; }
+input:focus, select:focus { outline: 2px solid #2563eb33; border-color: #2563eb; }
 .grid { display: grid; gap: .55rem; margin-top: .4rem; }
 .house-info { display: grid; grid-template-columns: 6rem 1fr; gap: .35rem .8rem; margin: .4rem 0 0; }
 .house-info dt { color: var(--muted); font-size: .85rem; align-self: center; }

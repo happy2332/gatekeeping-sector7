@@ -20,7 +20,7 @@
       {% for h in houses %}
         <tr>
           <td data-label="House"><a href="{{ url_for('house_detail', house_id=h.id) }}"><strong>{{ h.number }}</strong></a></td>
-          <td data-label="Floor">{{ h.floor or '—' }}</td>
+          <td data-label="Floor">{{ floor_labels.get(h.floor, h.floor) if h.floor else '—' }}</td>
           <td data-label="Owner">{{ h.owner_name or '—' }}</td>
           <td data-label="Phone" class="muted">
             {% if h.phone and phone_visible(h) %}
@@ -52,17 +52,31 @@
 <section class="card">
   <h2>Add a vehicle</h2>
   <p class="muted" style="margin:.2rem 0 .8rem">
-    If your house is already registered, just type its number — owner and phone fill in for you and you only enter the new vehicle.
-    If it's not registered yet, fill the rest out too.
+    Pick the house number and floor. If that combination is already
+    registered, owner and phone auto-fill from the existing record —
+    you just enter the vehicle. Otherwise fill in owner and phone too.
   </p>
   <form method="post" action="{{ url_for('house_create') }}" class="grid" id="addVehicleForm">
     <label class="field">
       <span>House number</span>
-      <input id="houseNumberInput" name="number" placeholder="e.g. 633" required autocomplete="off">
+      <input id="houseNumberInput" name="number" list="houseNumbers"
+             placeholder="e.g. 633" required autocomplete="off"
+             inputmode="numeric" pattern="[0-9]+"
+             min="{{ house_number_min }}" max="{{ house_number_max }}">
+      <datalist id="houseNumbers">
+        {% for n in range(house_number_min, house_number_max + 1) %}
+          <option value="{{ n }}"></option>
+        {% endfor %}
+      </datalist>
     </label>
     <label class="field">
-      <span>Floor <em>(optional)</em></span>
-      <input id="floorInput" name="floor" placeholder="e.g. Ground, 1, 2" autocomplete="off">
+      <span>Floor</span>
+      <select id="floorInput" name="floor" required>
+        <option value="" disabled selected>Pick a floor</option>
+        {% for key in all_floors %}
+          <option value="{{ key }}">{{ floor_labels[key] }}</option>
+        {% endfor %}
+      </select>
     </label>
 
     <p id="lookupBanner" class="muted" hidden style="margin:.1rem 0;font-size:.9rem"></p>
@@ -87,7 +101,7 @@
     <div id="vehicleFields" class="grid" style="margin-top:.4rem">
       <label class="field">
         <span>Vehicle 1</span>
-        <input name="plate" placeholder="e.g. DL3CAB1234" autocapitalize="characters">
+        <input name="plate" placeholder="e.g. HR26FM8872" autocapitalize="characters">
       </label>
     </div>
     <button type="button" id="addVehicleBtn" class="link" style="text-align:left">+ Add another vehicle</button>
@@ -97,6 +111,7 @@
 </section>
 <script>
   (function () {
+    const FLOOR_LABELS = {{ floor_labels | tojson }};
     const numEl    = document.getElementById('houseNumberInput');
     const floorEl  = document.getElementById('floorInput');
     const ownerEl  = document.getElementById('ownerInput');
@@ -117,53 +132,40 @@
       phoneEl.required = true;
       ownerEl.readOnly = false;
       phoneEl.readOnly = false;
+      ownerEl.value = '';
+      phoneEl.value = '';
       submit.textContent = 'Add vehicle';
     }
 
     function setExistingHouseMode(match) {
       banner.hidden = false;
-      banner.innerHTML = `Adding to <strong>house ${match.number}${match.floor ? ' · floor ' + match.floor : ''}</strong>` +
-        (match.owner_name ? ` (${match.owner_name})` : '') + '. Owner and phone are taken from the existing record.';
+      const fl = FLOOR_LABELS[match.floor] || match.floor || '';
+      banner.innerHTML = `Adding to <strong>house ${match.number} (${fl})</strong>` +
+        (match.owner_name ? ` &mdash; ${match.owner_name}` : '') +
+        `. Owner and phone are taken from the existing record.`;
       newWrap.style.display = 'none';
       ownerEl.required = false;
       phoneEl.required = false;
-      // Pre-fill so the (hidden) values still go to the server (server ignores them, but it
-      // makes the round-trip safe and keeps Owner/Phone visible if the user expands the section)
       ownerEl.value = match.owner_name || '';
       phoneEl.value = match.phone || '';
-      submit.textContent = `Add vehicle to ${match.number}${match.floor ? ' · ' + match.floor : ''}`;
-    }
-
-    function setMultiFloorMode(matches) {
-      banner.hidden = false;
-      const floors = matches.map(m => m.floor).filter(Boolean);
-      banner.innerHTML = `House ${numEl.value.trim().toUpperCase()} has multiple floors: <strong>${floors.join(', ')}</strong>. Please specify a floor.`;
-      newWrap.style.display = '';
-      ownerEl.required = true;
-      phoneEl.required = true;
-      submit.textContent = 'Add vehicle';
+      submit.textContent = `Add vehicle to ${match.number} (${fl})`;
     }
 
     async function lookup() {
       const number = numEl.value.trim();
       const floor = floorEl.value.trim();
-      const key = number.toUpperCase() + '|' + floor;
+      const key = number + '|' + floor;
       if (key === lastKey) return;
       lastKey = key;
-      if (!number) { setNewHouseMode(); return; }
+      if (!number || !floor) { setNewHouseMode(); return; }
       try {
         const r = await fetch('/api/houses/lookup?number=' + encodeURIComponent(number) + '&floor=' + encodeURIComponent(floor));
         const data = await r.json();
-        if (!data.matches || data.matches.length === 0) { setNewHouseMode(); return; }
-        // Exact (number,floor) match → existing
-        const exact = data.matches.find(m => (m.floor || '') === floor);
-        if (exact) { setExistingHouseMode(exact); return; }
-        // Number matches but no floor specified and there are multiple floors → ask
-        if (!floor && data.matches.length > 0 && data.matches.some(m => m.floor)) {
-          setMultiFloorMode(data.matches);
-          return;
+        if (data.matches && data.matches.length === 1) {
+          setExistingHouseMode(data.matches[0]);
+        } else {
+          setNewHouseMode();
         }
-        setNewHouseMode();
       } catch (e) {
         setNewHouseMode();
       }
@@ -171,18 +173,17 @@
 
     function debounce() {
       clearTimeout(timer);
-      timer = setTimeout(lookup, 200);
+      timer = setTimeout(lookup, 150);
     }
     numEl.addEventListener('input', debounce);
-    floorEl.addEventListener('input', debounce);
+    floorEl.addEventListener('change', lookup);
     numEl.addEventListener('blur', lookup);
-    floorEl.addEventListener('blur', lookup);
 
     addBtn.addEventListener('click', () => {
       const idx = veWrap.querySelectorAll('input[name="plate"]').length + 1;
       const lbl = document.createElement('label');
       lbl.className = 'field';
-      lbl.innerHTML = `<span>Vehicle ${idx}</span><input name="plate" placeholder="e.g. DL3CAB1234" autocapitalize="characters">`;
+      lbl.innerHTML = `<span>Vehicle ${idx}</span><input name="plate" placeholder="e.g. HR26FM8872" autocapitalize="characters">`;
       veWrap.appendChild(lbl);
       lbl.querySelector('input').focus();
     });

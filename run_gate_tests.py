@@ -71,15 +71,15 @@ def get_house_id(number, floor=None):
 # Setup: log in as admin (so we can create houses), then test as guard.
 section("SETUP")
 post("/login", form={"password": ADMIN_PASSWORD})
-post("/houses/new", form={"number": "A-101", "owner_name": "Sharma", "phone": "9000000001"})
-post("/houses/new", form={"number": "A-102", "owner_name": "Kapoor", "floor": "1", "phone": "9000000002"})
-post("/houses/new", form={"number": "A-102", "owner_name": "Roy", "floor": "2", "phone": "9000000003"})
-post("/houses/new", form={"number": "B-201", "owner_name": "Iyer", "phone": "9000000004"})
+post("/houses/new", form={"number": "101", "floor": "ground", "owner_name": "Sharma", "phone": "9000000001"})
+post("/houses/new", form={"number": "102", "floor": "first",  "owner_name": "Kapoor", "phone": "9000000002"})
+post("/houses/new", form={"number": "102", "floor": "second", "owner_name": "Roy",    "phone": "9000000003"})
+post("/houses/new", form={"number": "201", "floor": "ground", "owner_name": "Iyer",   "phone": "9000000004"})
 
-a101 = get_house_id("A-101")
-a102_1 = get_house_id("A-102", "1")
-a102_2 = get_house_id("A-102", "2")
-b201 = get_house_id("B-201")
+a101 = get_house_id("101", "Ground")
+a102_1 = get_house_id("102", "First")
+a102_2 = get_house_id("102", "Second")
+b201 = get_house_id("201", "Ground")
 check("can resolve all 4 house ids", all([a101, a102_1, a102_2, b201]),
       f"a101={a101} a102_1={a102_1} a102_2={a102_2} b201={b201}")
 
@@ -137,12 +137,12 @@ check("search for non-matching string returns []", json.loads(body) == [])
 # Floor info returned for multi-floor houses
 _, body, _ = get("/api/vehicles/search?q=8CAF")
 data = json.loads(body)
-check("multi-floor: search result includes floor", data and data[0]["floor"] == "1",
+check("multi-floor: search result includes floor", data and data[0]["floor"] == "first",
       f"got {data}")
 
 _, body, _ = get("/api/vehicles/search?q=CK4321")
 data = json.loads(body)
-check("multi-floor: floor 2 returned correctly", data and data[0]["floor"] == "2",
+check("multi-floor: floor 'second' returned correctly", data and data[0]["floor"] == "second",
       f"got {data}")
 
 
@@ -165,7 +165,7 @@ check("after IN, search marks vehicle currently_inside=True", target["currently_
 _, body, _ = get("/")
 check("Inside view lists DL3CAB1234", "DL3CAB1234" in body)
 check("Inside view marks it as resident", re.search(r"DL3CAB1234.*?badge--resident", body, re.S))
-check("Inside view shows house A-101", re.search(r"DL3CAB1234.*?A-101", body, re.S))
+check("Inside view shows house 101", re.search(r"DL3CAB1234.*?101", body, re.S))
 
 # Log it OUT
 status, _, _ = post("/api/log",
@@ -200,17 +200,17 @@ check("Inside view lists visitor plate", "UP14XY9999" in body)
 check("Inside view shows host house owner in Owner column", "Sharma" in body)
 check("visitor row tagged with badge--visitor",
       re.search(r"UP14XY9999.*?badge--visitor", body, re.S))
-check("visitor attached to A-101", re.search(r"UP14XY9999.*?A-101", body, re.S))
+check("visitor attached to 101", re.search(r"UP14XY9999.*?101", body, re.S))
 
 # Visitor by house_number string (the API also accepts this)
 status, _, _ = post("/api/log", json_body={
     "plate": "MH12AA1111", "direction": "in", "kind": "visitor",
-    "house_number": "B-201", "visitor_name": "Pooja",
+    "house_number": "201", "visitor_name": "Pooja",
 })
 check("POST visitor IN by house_number string returns 200", status == 200)
 _, body, _ = get("/")
-check("visitor by house_number attached to B-201",
-      re.search(r"MH12AA1111.*?B-201", body, re.S))
+check("visitor by house_number attached to 201",
+      re.search(r"MH12AA1111.*?201", body, re.S))
 
 
 # -----------------------------------------------------------------
@@ -307,7 +307,7 @@ _, body, _ = get("/log?q=MH12AA1111")
 check("/log search by plate finds row", "MH12AA1111" in body and "TEMP1234X" not in body)
 
 # Search by house number
-_, body, _ = get("/log?q=B-201")
+_, body, _ = get("/log?q=201")
 check("/log search by house finds row", "MH12AA1111" in body)
 
 # Search by visitor name

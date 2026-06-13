@@ -37,6 +37,26 @@ GUARD_PASSWORD = os.environ.get("GUARD_PASSWORD", "guard")
 # schema column phone_masked is preserved either way so the data isn't lost.
 PHONE_MASKING_ENABLED = os.environ.get("GK_PHONE_MASKING", "").lower() in ("1", "true", "yes")
 
+# House numbers are integers 100..999. Floors are one of a fixed list.
+HOUSE_NUMBER_MIN = 100
+HOUSE_NUMBER_MAX = 999
+ALL_FLOORS = ("ground", "first", "second", "third", "fourth")
+FLOOR_LABELS = {"ground": "Ground", "first": "First", "second": "Second",
+                "third": "Third", "fourth": "Fourth"}
+
+
+def validate_house_number(raw):
+    s = (raw or "").strip()
+    if not s.isdigit():
+        return None
+    n = int(s)
+    return str(n) if HOUSE_NUMBER_MIN <= n <= HOUSE_NUMBER_MAX else None
+
+
+def validate_floor(raw):
+    s = (raw or "").strip().lower()
+    return s if s in ALL_FLOORS else None
+
 
 def current_role():
     return session.get("role", "resident")
@@ -100,6 +120,16 @@ def filter_as_time12(value):
 
 
 @app.context_processor
+def inject_house_constants():
+    return {
+        "house_number_min": HOUSE_NUMBER_MIN,
+        "house_number_max": HOUSE_NUMBER_MAX,
+        "all_floors": ALL_FLOORS,
+        "floor_labels": FLOOR_LABELS,
+    }
+
+
+@app.context_processor
 def inject_phone_helper():
     def phone_visible(house):
         if not PHONE_MASKING_ENABLED:
@@ -136,11 +166,12 @@ def init_db():
         """
         CREATE TABLE IF NOT EXISTS houses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            number TEXT NOT NULL,
-            owner_name TEXT,
-            phone TEXT,
-            floor TEXT,
-            phone_masked INTEGER NOT NULL DEFAULT 0
+            number TEXT NOT NULL CHECK(CAST(number AS INTEGER) BETWEEN 100 AND 999),
+            owner_name TEXT NOT NULL,
+            phone TEXT NOT NULL,
+            floor TEXT NOT NULL CHECK(LOWER(floor) IN ('ground','first','second','third','fourth')),
+            phone_masked INTEGER NOT NULL DEFAULT 0,
+            UNIQUE(number, floor)
         );
 
         CREATE TABLE IF NOT EXISTS vehicles (
@@ -168,45 +199,6 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_movements_ts ON movements(ts DESC);
         CREATE INDEX IF NOT EXISTS idx_movements_plate ON movements(plate);
         CREATE INDEX IF NOT EXISTS idx_vehicles_house ON vehicles(house_id);
-        """
-    )
-    cols = {row[1] for row in db.execute("PRAGMA table_info(houses)").fetchall()}
-    if "floor" not in cols:
-        db.execute("ALTER TABLE houses ADD COLUMN floor TEXT")
-    if "phone_masked" not in cols:
-        db.execute("ALTER TABLE houses ADD COLUMN phone_masked INTEGER NOT NULL DEFAULT 0")
-
-    # Migration: drop legacy UNIQUE constraint on houses.number so the same
-    # number can appear once per floor. We replace it with two partial indexes.
-    legacy = db.execute(
-        """
-        SELECT name FROM sqlite_master
-        WHERE type='index' AND tbl_name='houses' AND name LIKE 'sqlite_autoindex%'
-        """
-    ).fetchall()
-    if legacy:
-        db.executescript(
-            """
-            CREATE TABLE houses_new (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                number TEXT NOT NULL,
-                owner_name TEXT,
-                phone TEXT,
-                floor TEXT
-            );
-            INSERT INTO houses_new (id, number, owner_name, phone, floor)
-                SELECT id, number, owner_name, phone, floor FROM houses;
-            DROP TABLE houses;
-            ALTER TABLE houses_new RENAME TO houses;
-            """
-        )
-
-    db.executescript(
-        """
-        CREATE UNIQUE INDEX IF NOT EXISTS uniq_house_with_floor
-            ON houses(number, floor) WHERE floor IS NOT NULL;
-        CREATE UNIQUE INDEX IF NOT EXISTS uniq_house_no_floor
-            ON houses(number) WHERE floor IS NULL;
         """
     )
     db.commit()
@@ -401,15 +393,18 @@ def house_detail(house_id):
 
 @app.route("/houses/new", methods=["POST"])
 def house_create():
-    number = request.form.get("number", "").strip().upper()
-    if not number:
-        flash("House number required", "error")
+    number = validate_house_number(request.form.get("number", ""))
+    if number is None:
+        flash(f"House number must be between {HOUSE_NUMBER_MIN} and {HOUSE_NUMBER_MAX}", "error")
+        return redirect(url_for("houses_list"))
+    floor = validate_floor(request.form.get("floor", ""))
+    if floor is None:
+        flash("Please pick a floor", "error")
         return redirect(url_for("houses_list"))
     # Owner / phone are validated *only* on the new-house path. The existing-house
     # path doesn't need them — owner+phone are taken from the existing record.
     owner_name = request.form.get("owner_name", "").strip()
     phone = request.form.get("phone", "").strip()
-    floor = request.form.get("floor", "").strip() or None
     db = get_db()
 
     # Collect and normalise vehicle entries (form sends them as plate[] inputs).
@@ -447,36 +442,28 @@ def house_create():
             norms,
         ).fetchall()
         for r in rows:
-            label = r["h_num"] + (f" floor {r['h_floor']}" if r["h_floor"] else "")
+            f_label = FLOOR_LABELS.get(r["h_floor"], r["h_floor"]) if r["h_floor"] else ""
+            host = f"{r['h_num']} ({f_label})" if f_label else r["h_num"]
             owner = r["h_owner"] or "(no owner)"
-            conflicts.append(f"{r['plate']} is already registered to {label} ({owner})")
+            conflicts.append(f"{r['plate']} is already registered to {host} — {owner}")
     if conflicts:
         flash("Vehicle conflict: " + "; ".join(conflicts), "error")
         return redirect(url_for("houses_list"))
 
     # Look up whether this (number, floor) already exists.
-    existing = db.execute(
-        "SELECT id, floor, owner_name FROM houses WHERE number = ?", (number,)
-    ).fetchall()
-    has_with_floor = any(r["floor"] is not None for r in existing)
-    has_without_floor = any(r["floor"] is None for r in existing)
-    if floor is None and has_with_floor:
-        flash(f"House {number} already has floor entries — please specify a floor", "error")
-        return redirect(url_for("houses_list"))
-    if floor is not None and has_without_floor:
-        flash(f"House {number} is already registered without a floor — remove that entry first or skip the floor field", "error")
-        return redirect(url_for("houses_list"))
-    same_unit = next(
-        (r for r in existing if (r["floor"] or None) == floor),
-        None,
-    )
+    same_unit = db.execute(
+        "SELECT id, floor, owner_name FROM houses WHERE number = ? AND floor = ?",
+        (number, floor),
+    ).fetchone()
+
+    floor_label = FLOOR_LABELS.get(floor, floor)
+    label = f"{number} ({floor_label})"
 
     # Path A: house exists. Just attach the vehicles, ignore owner/phone fields.
     if same_unit:
         if not plates:
-            owner = same_unit["owner_name"] or "(no owner)"
-            suffix = f" floor {floor}" if floor else ""
-            flash(f"House {number}{suffix} is already registered to {owner}. Add at least one vehicle to attach.", "error")
+            owner = same_unit["owner_name"]
+            flash(f"House {label} is already registered to {owner}. Add at least one vehicle to attach.", "error")
             return redirect(url_for("houses_list"))
         try:
             for _, norm in plates:
@@ -489,7 +476,6 @@ def house_create():
             db.rollback()
             flash(f"Could not attach vehicles: {e}", "error")
             return redirect(url_for("houses_list"))
-        label = number + (f" floor {floor}" if floor else "")
         flash(f"Added {len(plates)} vehicle{'s' if len(plates) != 1 else ''} to house {label}", "ok")
         if role_at_least("admin"):
             return redirect(url_for("house_detail", house_id=same_unit["id"]))
@@ -526,7 +512,6 @@ def house_create():
         flash(f"Could not save house: {e}", "error")
         return redirect(url_for("houses_list"))
 
-    label = number + (f" floor {floor}" if floor else "")
     extra = f" with {len(plates)} vehicle{'s' if len(plates) != 1 else ''}" if plates else ""
     flash(f"Registered house {label}{extra}", "ok")
     if role_at_least("admin"):

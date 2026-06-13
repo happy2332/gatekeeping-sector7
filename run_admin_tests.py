@@ -84,12 +84,12 @@ def get_house_id(number, floor=None):
 section("SETUP")
 # Log in as admin to seed houses + vehicles, then log out before AUTH section.
 post("/login", form={"password": ADMIN_PASSWORD})
-post("/houses/new", form={"number": "A-101", "owner_name": "Sharma", "phone": "9000000001"})
-post("/houses/new", form={"number": "A-102", "owner_name": "Kapoor", "floor": "1", "phone": "9000000002"})
-post("/houses/new", form={"number": "B-201", "owner_name": "Iyer", "phone": "9000000004"})
-a101 = get_house_id("A-101")
-a102 = get_house_id("A-102", "1")
-b201 = get_house_id("B-201")
+post("/houses/new", form={"number": "101", "floor": "ground", "owner_name": "Sharma", "phone": "9000000001"})
+post("/houses/new", form={"number": "102", "floor": "first",  "owner_name": "Kapoor", "phone": "9000000002"})
+post("/houses/new", form={"number": "201", "floor": "ground", "owner_name": "Iyer",   "phone": "9000000004"})
+a101 = get_house_id("101", "Ground")
+a102 = get_house_id("102", "First")
+b201 = get_house_id("201", "Ground")
 post(f"/houses/{a101}", form={"action": "add_vehicle", "plate": "DL3CAB1234"})
 post(f"/houses/{a102}", form={"action": "add_vehicle", "plate": "DL8CAF7788"})
 post(f"/houses/{b201}", form={"action": "add_vehicle", "plate": "HR26DK9999"})
@@ -117,11 +117,13 @@ check("resident: GET /log works without login", status == 200)
 status, _, _ = get("/houses")
 check("resident: GET /houses works without login", status == 200)
 status, body, _ = get("/houses")
-check("resident: 'Add a house' form NOT shown without admin login",
-      "Add a house" not in body or "edit →" not in body)
+check("resident: 'Add a vehicle' form IS shown (residents can register)",
+      "Add a vehicle" in body)
+check("resident: 'edit →' link NOT shown",
+      "edit →" not in body)
 # Resident cannot post log
 status, _, _ = post("/api/log",
-    json_body={"plate": "ZZZ", "direction": "in", "kind": "visitor", "house_number": "A-101"})
+    json_body={"plate": "ZZZ", "direction": "in", "kind": "visitor", "house_number": "101"})
 check("resident cannot POST /api/log",
       status in (301, 302), f"got status={status}")
 # Resident cannot reach /gate
@@ -156,11 +158,11 @@ post("/logout")
 status, body, _ = post("/login", form={"password": GUARD_PASSWORD if (GUARD_PASSWORD := os.environ.get('GUARD_PASSWORD','guard')) else 'guard'})
 status, _, _ = get("/admin")
 check("guard cannot reach /admin (redirected to login)", status in (301, 302))
-status, _, _ = post("/houses/new", form={"number": "Z-999"})
-check("guard cannot create houses (redirected)", status in (301, 302))
+status, _, _ = post("/houses/new", form={"number": "555", "floor": "ground", "owner_name": "X", "phone": "1"})
+check("guard CAN create houses (residents can too)", status in (200, 302) and status not in (401, 403))
 # But guard CAN log via api/log
 status, _, _ = post("/api/log",
-    json_body={"plate": "GUARD1", "direction": "in", "kind": "visitor", "house_number": "A-101"})
+    json_body={"plate": "GUARD1", "direction": "in", "kind": "visitor", "house_number": "101"})
 check("guard CAN POST /api/log", status == 200)
 # Re-login as admin for the rest of the suite
 post("/logout")

@@ -53,7 +53,7 @@
         {% for h in houses %}
           <tr>
             <td data-label="Number"><strong>{{ h.number }}</strong></td>
-            <td data-label="Floor">{{ h.floor or '—' }}</td>
+            <td data-label="Floor">{{ floor_labels.get(h.floor, h.floor) if h.floor else '—' }}</td>
             <td data-label="Owner">{{ h.owner_name or '—' }}</td>
             <td data-label="Vehicles">{{ h.vehicle_count }}</td>
             <td data-label="">
