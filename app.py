@@ -299,6 +299,22 @@ def houses_list():
         params,
     ).fetchall()
 
+    # When the user is searching, attach the matched plates per house so the
+    # Vehicles column can show the *why* of the match, not just a count.
+    matched_plates = {}
+    if q:
+        like = f"%{q.upper()}%"
+        for r in db.execute(
+            """
+            SELECT v.house_id, v.plate
+            FROM vehicles v
+            WHERE UPPER(v.plate) LIKE ?
+            ORDER BY v.plate
+            """,
+            (like,),
+        ).fetchall():
+            matched_plates.setdefault(r["house_id"], []).append(r["plate"])
+
     # Distinct floors for the filter pills (skip nulls)
     floors = [r["floor"] for r in db.execute(
         "SELECT DISTINCT floor FROM houses WHERE floor IS NOT NULL ORDER BY floor"
@@ -309,7 +325,8 @@ def houses_list():
 
     return render_template("houses.html", houses=rows, q=q,
                            floors=floors, has_floorless=has_floorless,
-                           floor_filter=floor_filter)
+                           floor_filter=floor_filter,
+                           matched_plates=matched_plates)
 
 
 @app.route("/houses/<int:house_id>", methods=["GET", "POST"])

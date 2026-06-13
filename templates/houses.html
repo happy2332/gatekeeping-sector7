@@ -52,7 +52,16 @@
               <span class="muted">hidden</span>
             {% endif %}
           </td>
-          <td data-label="Vehicles">{{ h.vehicle_count }}</td>
+          <td data-label="Vehicles">
+            {%- set plates = matched_plates.get(h.id) if q else None -%}
+            {%- if plates -%}
+              {%- for p in plates -%}
+                <span style="display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#fef3c7;padding:.05rem .35rem;border-radius:4px;margin:.05rem .15rem .05rem 0">{{ p }}</span>
+              {%- endfor -%}
+            {%- else -%}
+              {{ h.vehicle_count }}
+            {%- endif -%}
+          </td>
           {% if is_admin %}<td data-label=""><a href="{{ url_for('house_detail', house_id=h.id) }}">edit →</a></td>{% endif %}
         </tr>
       {% endfor %}
