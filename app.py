@@ -264,10 +264,14 @@ def index():
           AND direction = 'in'
         """
     ).fetchone()["c"]
+    vehicles_total = db.execute("SELECT COUNT(*) AS c FROM vehicles").fetchone()["c"]
+    houses_total = db.execute("SELECT COUNT(*) AS c FROM houses").fetchone()["c"]
     return render_template(
         "index.html",
         inside=inside, recent=recent, q=q, kind_filter=kind_filter,
         inside_total=inside_total,
+        vehicles_total=vehicles_total,
+        houses_total=houses_total,
     )
 
 

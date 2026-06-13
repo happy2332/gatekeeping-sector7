@@ -17,6 +17,7 @@
   <p class="muted">Pick the house this visitor is going to.</p>
 
   <input id="houseSearch" type="search" placeholder="House number" autocomplete="off">
+  <small id="houseSearchHelp" style="font-size:.85rem;display:none;color:#dc2626;font-weight:500">Pick a valid house from the list.</small>
   <ul id="houseList" class="house-list">
     {% for h in houses %}
       <li data-id="{{ h.id }}" data-number="{{ h.number }}" data-floor="{{ h.floor or '' }}">
@@ -28,8 +29,8 @@
   <p id="visitorChosen" class="muted"></p>
 
   <form id="visitorForm" class="grid">
-    <input name="plate" placeholder="Vehicle number" required autocapitalize="characters">
-    <button type="submit" data-direction="in" class="btn btn--in">Log IN</button>
+    <input id="visitorPlate" name="plate" placeholder="Vehicle number" required autocapitalize="characters" disabled>
+    <button id="visitorSubmit" type="submit" data-direction="in" class="btn btn--in" disabled>Log IN</button>
     <p class="muted" style="font-size:.85rem;margin:.25rem 0 0">
       To log a visitor OUT, search the vehicle number above &mdash; the IN/OUT buttons appear next to the result.
     </p>
@@ -120,12 +121,34 @@
     visitorSection.scrollIntoView({behavior: 'smooth'});
   });
 
+  const visitorPlate  = document.getElementById('visitorPlate');
+  const visitorSubmit = document.getElementById('visitorSubmit');
+  const houseHelp     = document.getElementById('houseSearchHelp');
+
+  function setVisitorLocked(locked) {
+    visitorPlate.disabled = locked;
+    visitorSubmit.disabled = locked;
+  }
+  setVisitorLocked(true);
+
   houseSearch.addEventListener('input', () => {
-    const q = houseSearch.value.toUpperCase();
+    const q = houseSearch.value.toUpperCase().trim();
+    let visibleCount = 0;
     [...houseList.children].forEach(li => {
       const txt = (li.dataset.number + ' ' + (li.dataset.floor || '') + ' ' + li.textContent).toUpperCase();
-      li.style.display = txt.includes(q) ? '' : 'none';
+      const match = txt.includes(q);
+      li.style.display = match ? '' : 'none';
+      if (match) visibleCount++;
     });
+    // Picking via the list is the only way to get a valid house, so editing
+    // the search box invalidates any prior pick.
+    if (chosenHouse) {
+      chosenHouse = null;
+      visitorChosen.textContent = '';
+      setVisitorLocked(true);
+    }
+    // Show red error when there's text in the box but nothing matches it.
+    houseHelp.style.display = (q && visibleCount === 0) ? '' : 'none';
   });
 
   houseList.addEventListener('click', (e) => {
@@ -133,9 +156,13 @@
     if (!li) return;
     chosenHouse = {id: li.dataset.id, label: li.textContent.trim().replace(/\s+/g, ' ')};
     visitorChosen.innerHTML = `Visitor for: <strong>${chosenHouse.label}</strong> <button class="link" id="clearChosen">clear</button>`;
+    houseHelp.style.display = 'none';
+    setVisitorLocked(false);
+    visitorPlate.focus();
     document.getElementById('clearChosen').addEventListener('click', () => {
       chosenHouse = null;
       visitorChosen.textContent = '';
+      setVisitorLocked(true);
     });
   });
 

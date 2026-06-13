@@ -4,9 +4,13 @@
 <section class="card">
   <h1>Currently inside the pocket
     <span class="badge" style="font-size:.85rem;vertical-align:middle;background:#dbeafe;color:#1e40af;border-color:#bfdbfe">
-      {{ inside_total }} vehicle{{ '' if inside_total == 1 else 's' }}
+      {{ inside_total }}/{{ vehicles_total }} vehicles
     </span>
   </h1>
+  <p class="muted" style="margin:.2rem 0 .8rem;font-size:.9rem">
+    {{ houses_total }} house{{ '' if houses_total == 1 else 's' }} registered
+    so far across the society.
+  </p>
   <form method="get" class="row" style="margin:.4rem 0 .4rem">
     <input name="q" value="{{ q or '' }}" placeholder="Search by vehicle, house or owner">
     {% if kind_filter %}<input type="hidden" name="kind" value="{{ kind_filter }}">{% endif %}
