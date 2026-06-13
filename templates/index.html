@@ -12,7 +12,7 @@
   {% if inside %}
     <table class="data sortable">
       <thead><tr>
-        <th>Vehicle</th><th>Type</th><th>House</th><th>Visitor</th>
+        <th>Vehicle</th><th>Type</th><th>House</th><th>Name</th>
         <th data-sort-key="date">Date</th><th data-sort-key="date">Time</th>
       </tr></thead>
       <tbody>
@@ -21,7 +21,15 @@
             <td data-label="Vehicle"><strong>{{ r.plate }}</strong></td>
             <td data-label="Type"><span class="badge badge--{{ r.kind }}">{{ r.kind }}</span></td>
             <td data-label="House">{% if r.house_id %}<a href="{{ url_for('house_detail', house_id=r.house_id) }}">{{ r.house_number }}{% if r.house_floor %} · {{ r.house_floor }}{% endif %}</a>{% else %}—{% endif %}</td>
-            <td data-label="Visitor">{{ r.visitor_name or '' }}</td>
+            <td data-label="Name">
+              {%- if r.kind == 'visitor' -%}
+                {{ r.visitor_name or '—' }}
+              {%- elif r.kind == 'resident' -%}
+                {{ r.house_owner or '—' }}
+              {%- else -%}
+                —
+              {%- endif -%}
+            </td>
             <td data-label="Date" class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_date }}</td>
             <td data-label="Time" class="muted" data-sort-value="{{ r.ts }}">{{ r.ts | as_time12 }}</td>
           </tr>

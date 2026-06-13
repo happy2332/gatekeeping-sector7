@@ -11,7 +11,7 @@
     <thead><tr>
       <th data-sort-key="date">Date</th><th data-sort-key="date">Time</th>
       <th>Vehicle</th><th>Status</th><th>Type</th><th>House</th>
-      <th>Visitor</th><th data-sortable="false">Note</th>
+      <th>Name</th><th data-sortable="false">Note</th>
     </tr></thead>
     <tbody>
       {% for r in rows %}
@@ -22,7 +22,15 @@
           <td data-label="Status"><span class="badge badge--{{ r.direction }}">{{ r.direction }}</span></td>
           <td data-label="Type"><span class="badge badge--{{ r.kind }}">{{ r.kind }}</span></td>
           <td data-label="House">{% if r.house_id %}<a href="{{ url_for('house_detail', house_id=r.house_id) }}">{{ r.house_number }}{% if r.house_floor %} · {{ r.house_floor }}{% endif %}</a>{% else %}—{% endif %}</td>
-          <td data-label="Visitor">{{ r.visitor_name or '' }}{% if r.visitor_phone %} <span class="muted">({{ r.visitor_phone }})</span>{% endif %}</td>
+          <td data-label="Name">
+            {%- if r.kind == 'visitor' -%}
+              {{ r.visitor_name or '—' }}{% if r.visitor_phone %} <span class="muted">({{ r.visitor_phone }})</span>{% endif %}
+            {%- elif r.kind == 'resident' -%}
+              {{ r.house_owner or '—' }}
+            {%- else -%}
+              —
+            {%- endif -%}
+          </td>
           <td data-label="Note" class="muted">{{ r.note or '' }}</td>
         </tr>
       {% endfor %}

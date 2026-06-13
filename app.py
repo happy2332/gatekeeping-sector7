@@ -226,6 +226,7 @@ def index():
         f"""
         SELECT m.plate, m.kind, m.ts, m.house_id,
                h.number AS house_number, h.floor AS house_floor,
+               h.owner_name AS house_owner,
                m.visitor_name
         FROM movements m
         LEFT JOIN houses h ON h.id = m.house_id
@@ -550,7 +551,8 @@ def log_view():
         params = [like, like, like, like]
     rows = db.execute(
         f"""
-        SELECT m.*, h.number AS house_number, h.floor AS house_floor
+        SELECT m.*, h.number AS house_number, h.floor AS house_floor,
+               h.owner_name AS house_owner
         FROM movements m LEFT JOIN houses h ON h.id = m.house_id
         {where}
         ORDER BY m.id DESC
