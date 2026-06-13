@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Houses{% endblock %}
+{% block title %}Vehicles{% endblock %}
 {% block content %}
 <section class="card">
-  <h1>Houses</h1>
+  <h1>Vehicles</h1>
   <form method="get" class="row" style="margin:.4rem 0 .4rem">
-    <input name="q" value="{{ q or '' }}" placeholder="Search by house, owner or vehicle">
+    <input name="q" value="{{ q or '' }}" placeholder="Search by vehicle, house or owner">
     <button class="btn" style="flex:0 0 auto">Search</button>
     {% if q %}<a class="btn" style="flex:0 0 auto;background:#6b7280" href="{{ url_for('houses_list') }}">Clear</a>{% endif %}
   </form>
@@ -12,14 +12,14 @@
   {% if houses %}
   <table class="data sortable">
     <thead><tr>
-      <th>Number</th><th>Floor</th><th>Owner</th><th>Phone</th>
+      <th>House</th><th>Floor</th><th>Owner</th><th>Phone</th>
       <th data-sort-key="num">Vehicles</th>
       {% if is_admin %}<th data-sortable="false"></th>{% endif %}
     </tr></thead>
     <tbody>
       {% for h in houses %}
         <tr>
-          <td data-label="Number"><a href="{{ url_for('house_detail', house_id=h.id) }}"><strong>{{ h.number }}</strong></a></td>
+          <td data-label="House"><a href="{{ url_for('house_detail', house_id=h.id) }}"><strong>{{ h.number }}</strong></a></td>
           <td data-label="Floor">{{ h.floor or '—' }}</td>
           <td data-label="Owner">{{ h.owner_name or '—' }}</td>
           <td data-label="Phone" class="muted">
@@ -45,36 +45,44 @@
     </tbody>
   </table>
   {% else %}
-    <p class="muted">{% if q %}No houses match "{{ q }}".{% else %}No houses yet — add one below.{% endif %}</p>
+    <p class="muted">{% if q %}No vehicles match "{{ q }}".{% else %}No vehicles yet — add one below.{% endif %}</p>
   {% endif %}
 </section>
 
 <section class="card">
-  <h2>Register a house</h2>
-  <p class="muted" style="margin:.2rem 0 .8rem">House details + your registered vehicles, in one go. Add as many vehicles as you need.</p>
-  <form method="post" action="{{ url_for('house_create') }}" class="grid">
+  <h2>Add a vehicle</h2>
+  <p class="muted" style="margin:.2rem 0 .8rem">
+    If your house is already registered, just type its number — owner and phone fill in for you and you only enter the new vehicle.
+    If it's not registered yet, fill the rest out too.
+  </p>
+  <form method="post" action="{{ url_for('house_create') }}" class="grid" id="addVehicleForm">
     <label class="field">
       <span>House number</span>
-      <input name="number" placeholder="e.g. 633" required>
+      <input id="houseNumberInput" name="number" placeholder="e.g. 633" required autocomplete="off">
     </label>
     <label class="field">
       <span>Floor <em>(optional)</em></span>
-      <input name="floor" placeholder="e.g. Ground, 1, 2">
+      <input id="floorInput" name="floor" placeholder="e.g. Ground, 1, 2" autocomplete="off">
     </label>
-    <label class="field">
-      <span>Owner name</span>
-      <input name="owner_name" placeholder="e.g. Mukesh Gupta" required>
-    </label>
-    <label class="field">
-      <span>Phone</span>
-      <input name="phone" placeholder="10-digit number" inputmode="tel" required>
-    </label>
-    {% if phone_masking_enabled %}
-      <label class="checkbox">
-        <input type="checkbox" name="phone_masked" value="1">
-        <span>Hide phone from residents <em>(only admin and guard can see it)</em></span>
+
+    <p id="lookupBanner" class="muted" hidden style="margin:.1rem 0;font-size:.9rem"></p>
+
+    <div id="newHouseFields" class="grid">
+      <label class="field">
+        <span>Owner name</span>
+        <input id="ownerInput" name="owner_name" placeholder="e.g. Mukesh Gupta" required>
       </label>
-    {% endif %}
+      <label class="field">
+        <span>Phone</span>
+        <input id="phoneInput" name="phone" placeholder="10-digit number" inputmode="tel" required>
+      </label>
+      {% if phone_masking_enabled %}
+        <label class="checkbox">
+          <input type="checkbox" name="phone_masked" value="1">
+          <span>Hide phone from residents <em>(only admin and guard can see it)</em></span>
+        </label>
+      {% endif %}
+    </div>
 
     <div id="vehicleFields" class="grid" style="margin-top:.4rem">
       <label class="field">
@@ -84,20 +92,98 @@
     </div>
     <button type="button" id="addVehicleBtn" class="link" style="text-align:left">+ Add another vehicle</button>
 
-    <button class="btn">Register house</button>
+    <button id="submitBtn" class="btn">Add vehicle</button>
   </form>
 </section>
 <script>
   (function () {
-    const btn = document.getElementById('addVehicleBtn');
-    const wrap = document.getElementById('vehicleFields');
-    if (!btn || !wrap) return;
-    btn.addEventListener('click', () => {
-      const idx = wrap.querySelectorAll('input[name="plate"]').length + 1;
+    const numEl    = document.getElementById('houseNumberInput');
+    const floorEl  = document.getElementById('floorInput');
+    const ownerEl  = document.getElementById('ownerInput');
+    const phoneEl  = document.getElementById('phoneInput');
+    const banner   = document.getElementById('lookupBanner');
+    const newWrap  = document.getElementById('newHouseFields');
+    const submit   = document.getElementById('submitBtn');
+    const addBtn   = document.getElementById('addVehicleBtn');
+    const veWrap   = document.getElementById('vehicleFields');
+
+    let timer = null;
+    let lastKey = '';
+
+    function setNewHouseMode() {
+      banner.hidden = true;
+      newWrap.style.display = '';
+      ownerEl.required = true;
+      phoneEl.required = true;
+      ownerEl.readOnly = false;
+      phoneEl.readOnly = false;
+      submit.textContent = 'Add vehicle';
+    }
+
+    function setExistingHouseMode(match) {
+      banner.hidden = false;
+      banner.innerHTML = `Adding to <strong>house ${match.number}${match.floor ? ' · floor ' + match.floor : ''}</strong>` +
+        (match.owner_name ? ` (${match.owner_name})` : '') + '. Owner and phone are taken from the existing record.';
+      newWrap.style.display = 'none';
+      ownerEl.required = false;
+      phoneEl.required = false;
+      // Pre-fill so the (hidden) values still go to the server (server ignores them, but it
+      // makes the round-trip safe and keeps Owner/Phone visible if the user expands the section)
+      ownerEl.value = match.owner_name || '';
+      phoneEl.value = match.phone || '';
+      submit.textContent = `Add vehicle to ${match.number}${match.floor ? ' · ' + match.floor : ''}`;
+    }
+
+    function setMultiFloorMode(matches) {
+      banner.hidden = false;
+      const floors = matches.map(m => m.floor).filter(Boolean);
+      banner.innerHTML = `House ${numEl.value.trim().toUpperCase()} has multiple floors: <strong>${floors.join(', ')}</strong>. Please specify a floor.`;
+      newWrap.style.display = '';
+      ownerEl.required = true;
+      phoneEl.required = true;
+      submit.textContent = 'Add vehicle';
+    }
+
+    async function lookup() {
+      const number = numEl.value.trim();
+      const floor = floorEl.value.trim();
+      const key = number.toUpperCase() + '|' + floor;
+      if (key === lastKey) return;
+      lastKey = key;
+      if (!number) { setNewHouseMode(); return; }
+      try {
+        const r = await fetch('/api/houses/lookup?number=' + encodeURIComponent(number) + '&floor=' + encodeURIComponent(floor));
+        const data = await r.json();
+        if (!data.matches || data.matches.length === 0) { setNewHouseMode(); return; }
+        // Exact (number,floor) match → existing
+        const exact = data.matches.find(m => (m.floor || '') === floor);
+        if (exact) { setExistingHouseMode(exact); return; }
+        // Number matches but no floor specified and there are multiple floors → ask
+        if (!floor && data.matches.length > 0 && data.matches.some(m => m.floor)) {
+          setMultiFloorMode(data.matches);
+          return;
+        }
+        setNewHouseMode();
+      } catch (e) {
+        setNewHouseMode();
+      }
+    }
+
+    function debounce() {
+      clearTimeout(timer);
+      timer = setTimeout(lookup, 200);
+    }
+    numEl.addEventListener('input', debounce);
+    floorEl.addEventListener('input', debounce);
+    numEl.addEventListener('blur', lookup);
+    floorEl.addEventListener('blur', lookup);
+
+    addBtn.addEventListener('click', () => {
+      const idx = veWrap.querySelectorAll('input[name="plate"]').length + 1;
       const lbl = document.createElement('label');
       lbl.className = 'field';
       lbl.innerHTML = `<span>Vehicle ${idx}</span><input name="plate" placeholder="e.g. DL3CAB1234" autocapitalize="characters">`;
-      wrap.appendChild(lbl);
+      veWrap.appendChild(lbl);
       lbl.querySelector('input').focus();
     });
   })();

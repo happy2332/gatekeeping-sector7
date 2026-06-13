@@ -14,7 +14,7 @@
       {% if is_guard %}<a href="{{ url_for('gate') }}">Gate</a>{% endif %}
       <a href="{{ url_for('index') }}">Inside</a>
       <a href="{{ url_for('log_view') }}">Log</a>
-      <a href="{{ url_for('houses_list') }}">Houses</a>
+      <a href="{{ url_for('houses_list') }}">Vehicles</a>
       {% if is_admin %}<a href="{{ url_for('admin') }}">Admin</a>{% endif %}
       {% if is_guard or is_admin %}
         <form method="post" action="{{ url_for('logout') }}" style="display:inline">

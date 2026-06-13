@@ -405,14 +405,10 @@ def house_create():
     if not number:
         flash("House number required", "error")
         return redirect(url_for("houses_list"))
+    # Owner / phone are validated *only* on the new-house path. The existing-house
+    # path doesn't need them — owner+phone are taken from the existing record.
     owner_name = request.form.get("owner_name", "").strip()
-    if not owner_name:
-        flash("Owner name is required", "error")
-        return redirect(url_for("houses_list"))
     phone = request.form.get("phone", "").strip()
-    if not phone:
-        flash("Phone number is required", "error")
-        return redirect(url_for("houses_list"))
     floor = request.form.get("floor", "").strip() or None
     db = get_db()
 
@@ -458,9 +454,9 @@ def house_create():
         flash("Vehicle conflict: " + "; ".join(conflicts), "error")
         return redirect(url_for("houses_list"))
 
-    # House dedup with helpful message
+    # Look up whether this (number, floor) already exists.
     existing = db.execute(
-        "SELECT floor, owner_name FROM houses WHERE number = ?", (number,)
+        "SELECT id, floor, owner_name FROM houses WHERE number = ?", (number,)
     ).fetchall()
     has_with_floor = any(r["floor"] is not None for r in existing)
     has_without_floor = any(r["floor"] is None for r in existing)
@@ -474,13 +470,39 @@ def house_create():
         (r for r in existing if (r["floor"] or None) == floor),
         None,
     )
+
+    # Path A: house exists. Just attach the vehicles, ignore owner/phone fields.
     if same_unit:
-        owner = same_unit["owner_name"] or "(no owner)"
-        suffix = f" floor {floor}" if floor else ""
-        flash(f"House {number}{suffix} is already registered to {owner}", "error")
+        if not plates:
+            owner = same_unit["owner_name"] or "(no owner)"
+            suffix = f" floor {floor}" if floor else ""
+            flash(f"House {number}{suffix} is already registered to {owner}. Add at least one vehicle to attach.", "error")
+            return redirect(url_for("houses_list"))
+        try:
+            for _, norm in plates:
+                db.execute(
+                    "INSERT INTO vehicles (house_id, plate) VALUES (?, ?)",
+                    (same_unit["id"], norm),
+                )
+            db.commit()
+        except sqlite3.IntegrityError as e:
+            db.rollback()
+            flash(f"Could not attach vehicles: {e}", "error")
+            return redirect(url_for("houses_list"))
+        label = number + (f" floor {floor}" if floor else "")
+        flash(f"Added {len(plates)} vehicle{'s' if len(plates) != 1 else ''} to house {label}", "ok")
+        if role_at_least("admin"):
+            return redirect(url_for("house_detail", house_id=same_unit["id"]))
         return redirect(url_for("houses_list"))
 
-    # All checks passed — insert the house, then the vehicles in the same txn.
+    # Path B: brand-new house. Owner + phone are required here.
+    if not owner_name:
+        flash("Owner name is required", "error")
+        return redirect(url_for("houses_list"))
+    if not phone:
+        flash("Phone number is required", "error")
+        return redirect(url_for("houses_list"))
+
     try:
         cur = db.execute(
             "INSERT INTO houses (number, owner_name, phone, floor, phone_masked) VALUES (?, ?, ?, ?, ?)",
@@ -509,7 +531,6 @@ def house_create():
     flash(f"Registered house {label}{extra}", "ok")
     if role_at_least("admin"):
         return redirect(url_for("house_detail", house_id=new_house_id))
-    # Residents can't open the detail page for editing — send them to the list
     return redirect(url_for("houses_list"))
 
 
@@ -521,6 +542,40 @@ def gate():
         "SELECT id, number, owner_name, floor FROM houses ORDER BY number, floor"
     ).fetchall()
     return render_template("gate.html", houses=houses)
+
+
+@app.get("/api/houses/lookup")
+def api_house_lookup():
+    """Used by the resident registration form: as they type the house number
+    (and optionally floor), tell them whether it already exists so the form can
+    auto-fill owner+phone and turn the submit into 'add vehicle to this house'.
+    """
+    number = request.args.get("number", "").strip().upper()
+    floor = request.args.get("floor", "").strip()
+    if not number:
+        return jsonify({"matches": []})
+    db = get_db()
+    if floor:
+        rows = db.execute(
+            "SELECT id, number, floor, owner_name, phone FROM houses "
+            "WHERE number = ? AND floor = ?",
+            (number, floor),
+        ).fetchall()
+    else:
+        rows = db.execute(
+            "SELECT id, number, floor, owner_name, phone FROM houses "
+            "WHERE number = ? ORDER BY floor",
+            (number,),
+        ).fetchall()
+    return jsonify({"matches": [
+        {
+            "id": r["id"],
+            "number": r["number"],
+            "floor": r["floor"],
+            "owner_name": r["owner_name"],
+            "phone": r["phone"],
+        } for r in rows
+    ]})
 
 
 @app.route("/api/vehicles/search")
