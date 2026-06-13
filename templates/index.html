@@ -4,7 +4,7 @@
 <section class="card">
   <h1>Currently inside the pocket</h1>
   <form method="get" class="row" style="margin:.4rem 0 .8rem">
-    <input name="q" value="{{ q or '' }}" placeholder="Search by vehicle, house or visitor name">
+    <input name="q" value="{{ q or '' }}" placeholder="Search by vehicle, house, owner or visitor name">
     <button class="btn" style="flex:0 0 auto">Search</button>
     {% if q %}<a class="btn" style="flex:0 0 auto;background:#6b7280" href="{{ url_for('index') }}">Clear</a>{% endif %}
   </form>

@@ -215,8 +215,13 @@ def index():
     where_extra = ""
     if q:
         like = f"%{q.upper()}%"
-        where_extra = "AND (m.plate LIKE ? OR h.number LIKE ? OR UPPER(m.visitor_name) LIKE ?)"
-        params = [like, like, like]
+        where_extra = (
+            "AND (UPPER(m.plate) LIKE ?"
+            "  OR UPPER(h.number) LIKE ?"
+            "  OR UPPER(m.visitor_name) LIKE ?"
+            "  OR UPPER(h.owner_name) LIKE ?)"
+        )
+        params = [like, like, like, like]
     inside = db.execute(
         f"""
         SELECT m.plate, m.kind, m.ts, m.house_id,
@@ -258,9 +263,9 @@ def houses_list():
             WHERE h.id IN (
                 SELECT h2.id FROM houses h2
                 LEFT JOIN vehicles v2 ON v2.house_id = h2.id
-                WHERE h2.number LIKE ?
+                WHERE UPPER(h2.number) LIKE ?
                    OR UPPER(h2.owner_name) LIKE ?
-                   OR v2.plate LIKE ?
+                   OR UPPER(v2.plate) LIKE ?
             )
             GROUP BY h.id
             ORDER BY h.number, h.floor
@@ -411,8 +416,8 @@ def api_vehicle_search():
         SELECT v.id AS vehicle_id, v.plate, h.id AS house_id,
                h.number AS house_number, h.floor, h.owner_name
         FROM vehicles v JOIN houses h ON h.id = v.house_id
-        WHERE v.plate LIKE ?
-        ORDER BY (CASE WHEN v.plate LIKE ? THEN 0 ELSE 1 END), v.plate
+        WHERE UPPER(v.plate) LIKE ?
+        ORDER BY (CASE WHEN UPPER(v.plate) LIKE ? THEN 0 ELSE 1 END), v.plate
         LIMIT 10
         """,
         (f"%{q}%", f"%{q}"),
@@ -535,9 +540,14 @@ def log_view():
     params = []
     where = ""
     if q:
-        where = "WHERE m.plate LIKE ? OR h.number LIKE ? OR m.visitor_name LIKE ?"
         like = f"%{q.upper()}%"
-        params = [like, like, like]
+        where = (
+            "WHERE UPPER(m.plate) LIKE ?"
+            "   OR UPPER(h.number) LIKE ?"
+            "   OR UPPER(m.visitor_name) LIKE ?"
+            "   OR UPPER(h.owner_name) LIKE ?"
+        )
+        params = [like, like, like, like]
     rows = db.execute(
         f"""
         SELECT m.*, h.number AS house_number, h.floor AS house_floor
