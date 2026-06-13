@@ -62,6 +62,15 @@ input:focus { outline: 2px solid #2563eb33; border-color: #2563eb; }
 .checkbox > span em { font-style: normal; color: var(--muted); font-size: .8rem; display: block; }
 .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
 .row > input[type="search"], .row > input[type="text"], .row > input:not([type]) { flex: 1 1 12rem; min-width: 8rem; }
+.pills { display: flex; gap: .35rem; flex-wrap: wrap; margin: .4rem 0 .8rem; }
+.pills > a {
+  display: inline-block; padding: .3rem .7rem; border-radius: 999px;
+  border: 1px solid var(--line); background: #fff; color: var(--ink);
+  text-decoration: none; font-size: .85rem; font-weight: 500;
+}
+.pills > a.active { background: #111827; color: #fff; border-color: #111827; }
+.pills .label { color: var(--muted); align-self: center; font-size: .8rem;
+  text-transform: uppercase; letter-spacing: .03em; padding-right: .25rem; }
 .btn {
   padding: .8rem 1rem; border: 0; border-radius: 8px; background: #111827;
   color: #fff; font-weight: 600; font-size: 1rem; cursor: pointer; flex: 1 1 auto;

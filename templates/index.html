@@ -3,12 +3,29 @@
 {% block content %}
 <section class="card">
   <h1>Currently inside the pocket</h1>
-  <form method="get" class="row" style="margin:.4rem 0 .8rem">
+  <form method="get" class="row" style="margin:.4rem 0 .4rem">
     <input name="q" value="{{ q or '' }}" placeholder="Search by vehicle, house, owner or visitor name">
+    {% if kind_filter %}<input type="hidden" name="kind" value="{{ kind_filter }}">{% endif %}
     <button class="btn" style="flex:0 0 auto">Search</button>
-    {% if q %}<a class="btn" style="flex:0 0 auto;background:#6b7280" href="{{ url_for('index') }}">Clear</a>{% endif %}
+    {% if q or kind_filter %}<a class="btn" style="flex:0 0 auto;background:#6b7280" href="{{ url_for('index') }}">Clear</a>{% endif %}
   </form>
-  {% if q %}<p class="muted" style="margin:0 0 .5rem">Showing matches for "<strong>{{ q }}</strong>".</p>{% endif %}
+  {% macro qs(kind=None) -%}
+    {%- set parts = [] -%}
+    {%- if q %}{% set _ = parts.append('q=' ~ q) %}{% endif -%}
+    {%- if kind %}{% set _ = parts.append('kind=' ~ kind) %}{% endif -%}
+    {{- ('?' ~ parts|join('&')) if parts else url_for('index') -}}
+  {%- endmacro %}
+  <div class="pills">
+    <span class="label">Type:</span>
+    <a href="{{ qs() }}"                  class="{{ 'active' if not kind_filter else '' }}">All</a>
+    <a href="{{ qs(kind='resident') }}"   class="{{ 'active' if kind_filter == 'resident' else '' }}">Resident</a>
+    <a href="{{ qs(kind='visitor')  }}"   class="{{ 'active' if kind_filter == 'visitor'  else '' }}">Visitor</a>
+    <a href="{{ qs(kind='unknown')  }}"   class="{{ 'active' if kind_filter == 'unknown'  else '' }}">Unknown</a>
+  </div>
+  {% if q or kind_filter %}<p class="muted" style="margin:0 0 .5rem">Showing
+    {%- if kind_filter %} <strong>{{ kind_filter }}</strong> entries{% endif %}
+    {%- if q %} matching "<strong>{{ q }}</strong>"{% endif -%}.
+  </p>{% endif %}
   {% if inside %}
     <table class="data sortable">
       <thead><tr>

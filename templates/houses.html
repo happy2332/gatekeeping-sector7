@@ -3,12 +3,35 @@
 {% block content %}
 <section class="card">
   <h1>Houses</h1>
-  <form method="get" class="row" style="margin:.4rem 0 .8rem">
+  <form method="get" class="row" style="margin:.4rem 0 .4rem">
     <input name="q" value="{{ q or '' }}" placeholder="Search by house, owner or vehicle">
+    {% if floor_filter %}<input type="hidden" name="floor" value="{{ floor_filter }}">{% endif %}
     <button class="btn" style="flex:0 0 auto">Search</button>
-    {% if q %}<a class="btn" style="flex:0 0 auto;background:#6b7280" href="{{ url_for('houses_list') }}">Clear</a>{% endif %}
+    {% if q or floor_filter %}<a class="btn" style="flex:0 0 auto;background:#6b7280" href="{{ url_for('houses_list') }}">Clear</a>{% endif %}
   </form>
-  {% if q %}<p class="muted" style="margin:0 0 .5rem">Showing matches for "<strong>{{ q }}</strong>" ({{ houses|length }} result{{ 's' if houses|length != 1 else '' }}).</p>{% endif %}
+  {% if floors or has_floorless %}
+    {% macro qs(fl=None) -%}
+      {%- set parts = [] -%}
+      {%- if q %}{% set _ = parts.append('q=' ~ q) %}{% endif -%}
+      {%- if fl %}{% set _ = parts.append('floor=' ~ fl) %}{% endif -%}
+      {{- ('?' ~ parts|join('&')) if parts else url_for('houses_list') -}}
+    {%- endmacro %}
+    <div class="pills">
+      <span class="label">Floor:</span>
+      <a href="{{ qs() }}" class="{{ 'active' if not floor_filter else '' }}">All</a>
+      {% if has_floorless %}
+        <a href="{{ qs(fl='_none_') }}" class="{{ 'active' if floor_filter == '_none_' else '' }}">No floor</a>
+      {% endif %}
+      {% for f in floors %}
+        <a href="{{ qs(fl=f) }}" class="{{ 'active' if floor_filter == f else '' }}">{{ f }}</a>
+      {% endfor %}
+    </div>
+  {% endif %}
+  {% if q or floor_filter %}<p class="muted" style="margin:0 0 .5rem">Showing
+    {%- if floor_filter %} <strong>{{ 'No floor' if floor_filter == '_none_' else 'Floor ' ~ floor_filter }}</strong>{% endif %}
+    {%- if q %}{{ ' matching' if floor_filter else ' matches for' }} "<strong>{{ q }}</strong>"{% endif %}
+    ({{ houses|length }} result{{ 's' if houses|length != 1 else '' }}).
+  </p>{% endif %}
   {% if houses %}
   <table class="data sortable">
     <thead><tr>

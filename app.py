@@ -211,6 +211,9 @@ def normalise_plate(plate: str) -> str:
 def index():
     db = get_db()
     q = request.args.get("q", "").strip()
+    kind_filter = request.args.get("kind", "").strip().lower()
+    if kind_filter not in ("resident", "visitor", "unknown"):
+        kind_filter = ""
     params = []
     where_extra = ""
     if q:
@@ -222,6 +225,9 @@ def index():
             "  OR UPPER(h.owner_name) LIKE ?)"
         )
         params = [like, like, like, like]
+    if kind_filter:
+        where_extra += " AND m.kind = ?"
+        params.append(kind_filter)
     inside = db.execute(
         f"""
         SELECT m.plate, m.kind, m.ts, m.house_id,
@@ -250,41 +256,60 @@ def index():
         LIMIT 20
         """
     ).fetchall()
-    return render_template("index.html", inside=inside, recent=recent, q=q)
+    return render_template("index.html", inside=inside, recent=recent, q=q, kind_filter=kind_filter)
 
 
 @app.route("/houses")
 def houses_list():
     db = get_db()
     q = request.args.get("q", "").strip()
+    floor_filter = request.args.get("floor", "").strip()
+    # Special sentinel to filter for no-floor houses
+    no_floor = floor_filter == "_none_"
+
+    clauses = []
+    params = []
     if q:
         like = f"%{q.upper()}%"
-        rows = db.execute(
-            """
-            SELECT h.*, COUNT(v.id) AS vehicle_count
-            FROM houses h LEFT JOIN vehicles v ON v.house_id = h.id
-            WHERE h.id IN (
-                SELECT h2.id FROM houses h2
-                LEFT JOIN vehicles v2 ON v2.house_id = h2.id
-                WHERE UPPER(h2.number) LIKE ?
-                   OR UPPER(h2.owner_name) LIKE ?
-                   OR UPPER(v2.plate) LIKE ?
-            )
-            GROUP BY h.id
-            ORDER BY h.number, h.floor
-            """,
-            (like, like, like),
-        ).fetchall()
-    else:
-        rows = db.execute(
-            """
-            SELECT h.*, COUNT(v.id) AS vehicle_count
-            FROM houses h LEFT JOIN vehicles v ON v.house_id = h.id
-            GROUP BY h.id
-            ORDER BY h.number, h.floor
-            """
-        ).fetchall()
-    return render_template("houses.html", houses=rows, q=q)
+        clauses.append(
+            "h.id IN ("
+            "  SELECT h2.id FROM houses h2"
+            "   LEFT JOIN vehicles v2 ON v2.house_id = h2.id"
+            "   WHERE UPPER(h2.number) LIKE ?"
+            "      OR UPPER(h2.owner_name) LIKE ?"
+            "      OR UPPER(v2.plate) LIKE ?"
+            ")"
+        )
+        params += [like, like, like]
+    if no_floor:
+        clauses.append("h.floor IS NULL")
+    elif floor_filter:
+        clauses.append("h.floor = ?")
+        params.append(floor_filter)
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+
+    rows = db.execute(
+        f"""
+        SELECT h.*, COUNT(v.id) AS vehicle_count
+        FROM houses h LEFT JOIN vehicles v ON v.house_id = h.id
+        {where}
+        GROUP BY h.id
+        ORDER BY h.number, h.floor
+        """,
+        params,
+    ).fetchall()
+
+    # Distinct floors for the filter pills (skip nulls)
+    floors = [r["floor"] for r in db.execute(
+        "SELECT DISTINCT floor FROM houses WHERE floor IS NOT NULL ORDER BY floor"
+    ).fetchall()]
+    has_floorless = db.execute(
+        "SELECT 1 FROM houses WHERE floor IS NULL LIMIT 1"
+    ).fetchone() is not None
+
+    return render_template("houses.html", houses=rows, q=q,
+                           floors=floors, has_floorless=has_floorless,
+                           floor_filter=floor_filter)
 
 
 @app.route("/houses/<int:house_id>", methods=["GET", "POST"])
@@ -544,17 +569,30 @@ def api_log():
 def log_view():
     db = get_db()
     q = request.args.get("q", "").strip()
+    kind_filter = request.args.get("kind", "").strip().lower()
+    if kind_filter not in ("resident", "visitor", "unknown"):
+        kind_filter = ""
+    status_filter = request.args.get("status", "").strip().lower()
+    if status_filter not in ("in", "out"):
+        status_filter = ""
     params = []
-    where = ""
+    clauses = []
     if q:
         like = f"%{q.upper()}%"
-        where = (
-            "WHERE UPPER(m.plate) LIKE ?"
-            "   OR UPPER(h.number) LIKE ?"
-            "   OR UPPER(m.visitor_name) LIKE ?"
-            "   OR UPPER(h.owner_name) LIKE ?"
+        clauses.append(
+            "(UPPER(m.plate) LIKE ?"
+            " OR UPPER(h.number) LIKE ?"
+            " OR UPPER(m.visitor_name) LIKE ?"
+            " OR UPPER(h.owner_name) LIKE ?)"
         )
-        params = [like, like, like, like]
+        params += [like, like, like, like]
+    if kind_filter:
+        clauses.append("m.kind = ?")
+        params.append(kind_filter)
+    if status_filter:
+        clauses.append("m.direction = ?")
+        params.append(status_filter)
+    where = ("WHERE " + " AND ".join(clauses)) if clauses else ""
     rows = db.execute(
         f"""
         SELECT m.*, h.number AS house_number, h.floor AS house_floor,
@@ -568,7 +606,8 @@ def log_view():
         """,
         params,
     ).fetchall()
-    return render_template("log.html", rows=rows, q=q)
+    return render_template("log.html", rows=rows, q=q,
+                           kind_filter=kind_filter, status_filter=status_filter)
 
 
 @app.route("/login", methods=["GET", "POST"])
