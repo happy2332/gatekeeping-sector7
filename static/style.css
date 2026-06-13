@@ -48,7 +48,7 @@ body {
 .topbar nav a:hover { color: #fff; }
 .topbar nav form { margin: 0; padding-left: 1rem; border-left: 1px solid rgba(255,255,255,.15); }
 .topbar nav form button { padding: 0; }
-main { max-width: 720px; margin: 0 auto; padding: 1rem; }
+main { max-width: 960px; margin: 0 auto; padding: 1rem; }
 .card {
   background: var(--card); border-radius: 14px; padding: 1.15rem 1.2rem;
   box-shadow: var(--shadow-sm);
@@ -154,7 +154,13 @@ input:disabled, select:disabled, button:disabled, .btn:disabled, .link:disabled 
   box-shadow: 0 4px 14px rgba(0,0,0,.2); z-index: 10;
 }
 .toast--bad { background: var(--out); }
-table.data { width: 100%; border-collapse: collapse; font-size: .95rem; }
+/* Wrapper that lets a wide table scroll inside its card without
+   breaking the card boundary. Applied automatically to every
+   <table class="data"> via a parent <div class="table-wrap">. */
+.card > .table-wrap,
+.card .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; margin: 0 -.4rem; }
+table.data { width: 100%; min-width: max-content; border-collapse: collapse; font-size: .95rem; }
+.card > .table-wrap > table.data { min-width: 100%; }
 table.data th, table.data td { text-align: left; padding: .6rem .45rem; border-bottom: 1px solid var(--line); }
 table.data th { font-size: .72rem; text-transform: uppercase; color: var(--muted); letter-spacing: .05em; font-weight: 700; }
 table.data tbody tr { transition: background .12s ease; }
@@ -173,6 +179,13 @@ table.data th[aria-sort="descending"]::after { content: "▼"; opacity: 1; color
   .topbar .brand { font-size: 1rem; }
   .topbar nav { gap: .9rem; flex-wrap: wrap; font-size: .9rem; }
   .topbar nav form { padding-left: .7rem; }
+
+  /* On mobile the table is restructured as a vertical stack of cards, so the
+     desktop "scroll horizontally" wrapper isn't needed and the min-width
+     trick would force unnecessary width. Reset both. */
+  .card > .table-wrap,
+  .card .table-wrap { overflow: visible; margin: 0; }
+  table.data { min-width: 0; }
 
   /* Data tables become a vertical stack of "cards" so all fields are visible
      without horizontal scrolling. The column header for each cell is shown

@@ -29,6 +29,7 @@
     <a href="{{ qs(kind=kind_filter, status='in')  }}" class="{{ 'active' if status_filter == 'in'  else '' }}">In</a>
     <a href="{{ qs(kind=kind_filter, status='out') }}" class="{{ 'active' if status_filter == 'out' else '' }}">Out</a>
   </div>
+  <div class="table-wrap">
   <table class="data sortable">
     <thead><tr>
       <th data-sort-key="date">Date</th><th data-sort-key="date">Time</th>
@@ -59,5 +60,6 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
 </section>
 {% endblock %}

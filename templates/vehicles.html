@@ -13,6 +13,7 @@
   </form>
   {% if q %}<p class="muted" style="margin:0 0 .5rem">Showing matches for "<strong>{{ q }}</strong>" ({{ vehicles|length }} result{{ 's' if vehicles|length != 1 else '' }}).</p>{% endif %}
   {% if vehicles %}
+  <div class="table-wrap">
   <table class="data sortable">
     <thead><tr>
       <th>Vehicle</th><th>House</th><th>Floor</th><th>Owner</th><th>Phone</th>
@@ -44,6 +45,7 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% else %}
     <p class="muted">{% if q %}No vehicles match "{{ q }}".{% else %}No vehicles yet — tap <strong>+ Add vehicle</strong> above.{% endif %}</p>
   {% endif %}
