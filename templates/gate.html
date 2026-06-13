@@ -67,23 +67,27 @@
       suggest.hidden = false;
       return;
     }
-    suggest.innerHTML = data.map(d => `
-      <li data-plate="${d.plate}" data-house-id="${d.house_id}">
+    suggest.innerHTML = data.map(d => {
+      const kindBadge = d.kind === 'resident' ? '' : `<span class="badge badge--${d.kind}">${d.kind}</span>`;
+      const houseText = d.house_number
+        ? `${d.house_number}${d.floor ? ' · Floor ' + d.floor : ''}${d.owner_name ? ' · ' + d.owner_name : ''}`
+        : '<em>no house</em>';
+      return `
+      <li data-plate="${d.plate}" data-house-id="${d.house_id || ''}" data-kind="${d.kind}">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap">
           <div>
             <strong>${d.plate}</strong>
+            ${kindBadge}
             <span class="badge">${d.currently_inside ? 'INSIDE' : 'outside'}</span>
-            <div class="muted" style="font-size:.85rem">
-              ${d.house_number}${d.floor ? ' · Floor ' + d.floor : ''}${d.owner_name ? ' · ' + d.owner_name : ''}
-            </div>
+            <div class="muted" style="font-size:.85rem">${houseText}</div>
           </div>
           <div class="row">
-            <button class="btn btn--in"  data-action="log" data-plate="${d.plate}" data-house-id="${d.house_id}" data-direction="in"  ${d.currently_inside ? 'disabled' : ''}>IN</button>
-            <button class="btn btn--out" data-action="log" data-plate="${d.plate}" data-house-id="${d.house_id}" data-direction="out" ${d.currently_inside ? '' : 'disabled'}>OUT</button>
+            <button class="btn btn--in"  data-action="log" data-plate="${d.plate}" data-house-id="${d.house_id || ''}" data-kind="${d.kind}" data-direction="in"  ${d.currently_inside ? 'disabled' : ''}>IN</button>
+            <button class="btn btn--out" data-action="log" data-plate="${d.plate}" data-house-id="${d.house_id || ''}" data-kind="${d.kind}" data-direction="out" ${d.currently_inside ? '' : 'disabled'}>OUT</button>
           </div>
         </div>
       </li>
-    `).join('');
+    `;}).join('');
     suggest.hidden = false;
   }
 
@@ -91,12 +95,14 @@
     const btn = e.target.closest('button[data-action="log"]');
     if (!btn) return;
     btn.disabled = true;
-    const ok = await postLog({
+    const houseId = btn.dataset.houseId ? parseInt(btn.dataset.houseId, 10) : null;
+    const payload = {
       plate: btn.dataset.plate,
       direction: btn.dataset.direction,
-      kind: 'resident',
-      house_id: parseInt(btn.dataset.houseId, 10),
-    });
+      kind: btn.dataset.kind || 'resident',
+    };
+    if (houseId) payload.house_id = houseId;
+    const ok = await postLog(payload);
     if (ok) {
       flash(`${btn.dataset.plate} logged ${btn.dataset.direction.toUpperCase()}`);
       search.value = '';

@@ -443,10 +443,13 @@ def api_vehicle_search():
     if len(q) < 2:
         return jsonify([])
     db = get_db()
-    rows = db.execute(
+
+    # Registered (resident) vehicles — primary source.
+    registered = db.execute(
         """
         SELECT v.id AS vehicle_id, v.plate, h.id AS house_id,
-               h.number AS house_number, h.floor, h.owner_name
+               h.number AS house_number, h.floor, h.owner_name,
+               'resident' AS kind
         FROM vehicles v JOIN houses h ON h.id = v.house_id
         WHERE UPPER(v.plate) LIKE ?
         ORDER BY (CASE WHEN UPPER(v.plate) LIKE ? THEN 0 ELSE 1 END), v.plate
@@ -454,6 +457,34 @@ def api_vehicle_search():
         """,
         (f"%{q}%", f"%{q}"),
     ).fetchall()
+    seen_plates = {r["plate"] for r in registered}
+
+    # Visitor / unknown plates seen in recent movements (not in vehicles table).
+    visitor_rows = db.execute(
+        """
+        SELECT m.plate,
+               h.id AS house_id, h.number AS house_number, h.floor, h.owner_name,
+               m.kind
+        FROM movements m
+        LEFT JOIN houses h ON h.id = m.house_id
+        WHERE m.kind IN ('visitor', 'unknown')
+          AND UPPER(m.plate) LIKE ?
+          AND m.id IN (SELECT MAX(id) FROM movements GROUP BY plate)
+        ORDER BY (CASE WHEN UPPER(m.plate) LIKE ? THEN 0 ELSE 1 END), m.id DESC
+        LIMIT 10
+        """,
+        (f"%{q}%", f"%{q}"),
+    ).fetchall()
+
+    rows = list(registered)
+    for r in visitor_rows:
+        if r["plate"] in seen_plates:
+            continue
+        seen_plates.add(r["plate"])
+        rows.append(r)
+        if len(rows) >= 10:
+            break
+
     out = []
     for r in rows:
         last = db.execute(
@@ -461,12 +492,13 @@ def api_vehicle_search():
             (r["plate"],),
         ).fetchone()
         out.append({
-            "vehicle_id": r["vehicle_id"],
+            "vehicle_id": r["vehicle_id"] if "vehicle_id" in r.keys() else None,
             "plate": r["plate"],
             "house_id": r["house_id"],
             "house_number": r["house_number"],
             "floor": r["floor"],
             "owner_name": r["owner_name"],
+            "kind": r["kind"],
             "currently_inside": bool(last and last["direction"] == "in"),
         })
     return jsonify(out)
