@@ -197,7 +197,7 @@ check("POST visitor IN returns 200", status == 200)
 
 _, body, _ = get("/")
 check("Inside view lists visitor plate", "UP14XY9999" in body)
-check("Inside view shows visitor name", "Amit" in body)
+check("Inside view shows host house owner in Owner column", "Sharma" in body)
 check("visitor row tagged with badge--visitor",
       re.search(r"UP14XY9999.*?badge--visitor", body, re.S))
 check("visitor attached to A-101", re.search(r"UP14XY9999.*?A-101", body, re.S))
@@ -294,7 +294,7 @@ check("normalised plate appears as DL3CAB1234 in log", "DL3CAB1234" in body)
 # -----------------------------------------------------------------
 section("LOG VIEW")
 _, body, _ = get("/log")
-check("/log shows visitor name in row", "Amit" in body)
+check("/log shows host house owner for visitor row", "Sharma" in body)
 check("/log shows note 'courier'", "courier" in body)
 # Date + Time columns rendered
 check("/log shows formatted Date column",
