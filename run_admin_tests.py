@@ -84,9 +84,9 @@ def get_house_id(number, floor=None):
 section("SETUP")
 # Log in as admin to seed houses + vehicles, then log out before AUTH section.
 post("/login", form={"password": ADMIN_PASSWORD})
-post("/houses/new", form={"number": "A-101", "owner_name": "Sharma"})
-post("/houses/new", form={"number": "A-102", "owner_name": "Kapoor", "floor": "1"})
-post("/houses/new", form={"number": "B-201", "owner_name": "Iyer"})
+post("/houses/new", form={"number": "A-101", "owner_name": "Sharma", "phone": "9000000001"})
+post("/houses/new", form={"number": "A-102", "owner_name": "Kapoor", "floor": "1", "phone": "9000000002"})
+post("/houses/new", form={"number": "B-201", "owner_name": "Iyer", "phone": "9000000004"})
 a101 = get_house_id("A-101")
 a102 = get_house_id("A-102", "1")
 b201 = get_house_id("B-201")

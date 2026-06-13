@@ -364,6 +364,10 @@ def house_create():
     if not number:
         flash("House number required", "error")
         return redirect(url_for("houses_list"))
+    phone = request.form.get("phone", "").strip()
+    if not phone:
+        flash("Phone number is required", "error")
+        return redirect(url_for("houses_list"))
     floor = request.form.get("floor", "").strip() or None
     db = get_db()
 
@@ -383,7 +387,7 @@ def house_create():
             (
                 number,
                 request.form.get("owner_name", "").strip() or None,
-                request.form.get("phone", "").strip() or None,
+                phone,
                 floor,
                 1 if request.form.get("phone_masked") else 0,
             ),

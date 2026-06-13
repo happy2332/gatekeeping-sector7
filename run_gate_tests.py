@@ -71,10 +71,10 @@ def get_house_id(number, floor=None):
 # Setup: log in as admin (so we can create houses), then test as guard.
 section("SETUP")
 post("/login", form={"password": ADMIN_PASSWORD})
-post("/houses/new", form={"number": "A-101", "owner_name": "Sharma"})
-post("/houses/new", form={"number": "A-102", "owner_name": "Kapoor", "floor": "1"})
-post("/houses/new", form={"number": "A-102", "owner_name": "Roy", "floor": "2"})
-post("/houses/new", form={"number": "B-201", "owner_name": "Iyer"})
+post("/houses/new", form={"number": "A-101", "owner_name": "Sharma", "phone": "9000000001"})
+post("/houses/new", form={"number": "A-102", "owner_name": "Kapoor", "floor": "1", "phone": "9000000002"})
+post("/houses/new", form={"number": "A-102", "owner_name": "Roy", "floor": "2", "phone": "9000000003"})
+post("/houses/new", form={"number": "B-201", "owner_name": "Iyer", "phone": "9000000004"})
 
 a101 = get_house_id("A-101")
 a102_1 = get_house_id("A-102", "1")

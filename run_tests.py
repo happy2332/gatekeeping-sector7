@@ -75,9 +75,14 @@ post("/login", {"password": ADMIN_PASSWORD})
 
 section("HOUSES — add")
 
-# 1. Add a house with only a number
-post("/houses/new", {"number": "A-101"})
-check("add house with only a number", "A-101" in get_houses_html())
+# 1. Add a house with only a number + phone (phone is now required)
+post("/houses/new", {"number": "A-101", "phone": "9000000001"})
+check("add house with only number + phone", "A-101" in get_houses_html())
+
+# 1b. Backend rejects house creation without phone (browser would also block via required)
+_, body, _ = post("/houses/new", {"number": "Z-999"})
+check("blank phone rejected", "phone number is required" in body.lower())
+check("Z-999 not added when phone blank", "Z-999" not in get_houses_html())
 
 # 2. Full fields
 post("/houses/new", {"number": "A-102", "floor": "1", "owner_name": "Sharma", "phone": "9876500001"})
@@ -89,29 +94,29 @@ check("add house with all fields — floor visible",
       bool(re.search(r"A-102.*?<td[^>]*>1</td>", html, re.S)),
       "expected floor=1 column for A-102")
 
-_, body, _ = post("/houses/new", {"number": "A-101"})
+_, body, _ = post("/houses/new", {"number": "A-101", "phone": "9000000099"})
 check("duplicate house number rejected", "already exists" in body.lower())
 
 # 3b. Same number with different floor — allowed (multi-floor houses)
-_, body, _ = post("/houses/new", {"number": "F-601", "floor": "Ground", "owner_name": "Mehta"})
-_, body, _ = post("/houses/new", {"number": "F-601", "floor": "1", "owner_name": "Gupta"})
-_, body, _ = post("/houses/new", {"number": "F-601", "floor": "2", "owner_name": "Roy"})
+_, body, _ = post("/houses/new", {"number": "F-601", "floor": "Ground", "owner_name": "Mehta", "phone": "9000000010"})
+_, body, _ = post("/houses/new", {"number": "F-601", "floor": "1", "owner_name": "Gupta", "phone": "9000000011"})
+_, body, _ = post("/houses/new", {"number": "F-601", "floor": "2", "owner_name": "Roy", "phone": "9000000012"})
 html = get_houses_html()
 check("multi-floor: F-601 Ground present", re.search(r"F-601.*?Ground", html, re.S) is not None)
 check("multi-floor: F-601 1 present", re.search(r"F-601.*?Gupta", html, re.S) is not None)
 check("multi-floor: F-601 2 present", re.search(r"F-601.*?Roy", html, re.S) is not None)
 
 # 3c. Same number + same floor → rejected
-_, body, _ = post("/houses/new", {"number": "F-601", "floor": "1"})
+_, body, _ = post("/houses/new", {"number": "F-601", "floor": "1", "phone": "9000000099"})
 check("same number + same floor rejected", "already exists" in body.lower())
 
 # 3d. Cannot mix floored and floor-less entries for the same number
-_, body, _ = post("/houses/new", {"number": "F-601"})  # no floor on a number that has floors
+_, body, _ = post("/houses/new", {"number": "F-601", "phone": "9000000099"})  # no floor on a number that has floors
 check("can't add floor-less when floors exist",
       "please specify a floor" in body.lower() or "specify a floor" in body.lower())
 
-_, body, _ = post("/houses/new", {"number": "G-701"})  # bare house, no floor
-_, body, _ = post("/houses/new", {"number": "G-701", "floor": "1"})  # try to add a floor later
+_, body, _ = post("/houses/new", {"number": "G-701", "phone": "9000000020"})  # bare house, no floor
+_, body, _ = post("/houses/new", {"number": "G-701", "floor": "1", "phone": "9000000021"})  # try to add a floor later
 check("can't add floor when no-floor entry exists",
       "without a floor" in body.lower() or "can't mix" in body.lower())
 
@@ -120,11 +125,11 @@ _, body, _ = post("/houses/new", {"number": ""})
 check("blank house number rejected", "house number required" in body.lower())
 
 # 5. Lowercase auto-uppercased
-post("/houses/new", {"number": "b-201"})
+post("/houses/new", {"number": "b-201", "phone": "9000000050"})
 check("lowercase number auto-uppercased to B-201", "B-201" in get_houses_html() and "b-201" not in get_houses_html())
 
 # 6. Spaces around number
-post("/houses/new", {"number": "  C-301  "})
+post("/houses/new", {"number": "  C-301  ", "phone": "9000000060"})
 html = get_houses_html()
 check("spaces trimmed around house number",
       "C-301" in html and "  C-301  " not in html)
@@ -248,11 +253,11 @@ check("D-401 count column = 0", count_for("D-401") == 0, f"got {count_for('D-401
 section("EDGE CASES")
 
 # 19. Unicode in owner name
-post("/houses/new", {"number": "E-501", "owner_name": "Sharma जी"})
+post("/houses/new", {"number": "E-501", "owner_name": "Sharma जी", "phone": "9000000080"})
 check("unicode owner name saved", "Sharma जी" in get_houses_html())
 
 # 20. Long house number
-post("/houses/new", {"number": "TOWER-9-FLAT-9999"})
+post("/houses/new", {"number": "TOWER-9-FLAT-9999", "phone": "9000000090"})
 check("long house number saved", "TOWER-9-FLAT-9999" in get_houses_html())
 
 
