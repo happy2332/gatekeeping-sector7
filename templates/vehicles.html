@@ -6,40 +6,37 @@
   <form method="get" class="row" style="margin:.4rem 0 .4rem">
     <input name="q" value="{{ q or '' }}" placeholder="Search by vehicle, house or owner">
     <button class="btn" style="flex:0 0 auto">Search</button>
-    {% if q %}<a class="btn" style="flex:0 0 auto;background:#6b7280" href="{{ url_for('houses_list') }}">Clear</a>{% endif %}
+    {% if q %}<a class="btn" style="flex:0 0 auto;background:#6b7280" href="{{ url_for('vehicles_list') }}">Clear</a>{% endif %}
   </form>
-  {% if q %}<p class="muted" style="margin:0 0 .5rem">Showing matches for "<strong>{{ q }}</strong>" ({{ houses|length }} result{{ 's' if houses|length != 1 else '' }}).</p>{% endif %}
-  {% if houses %}
+  {% if q %}<p class="muted" style="margin:0 0 .5rem">Showing matches for "<strong>{{ q }}</strong>" ({{ vehicles|length }} result{{ 's' if vehicles|length != 1 else '' }}).</p>{% endif %}
+  {% if vehicles %}
   <table class="data sortable">
     <thead><tr>
-      <th>House</th><th>Floor</th><th>Owner</th><th>Phone</th>
-      <th data-sort-key="num">Vehicles</th>
+      <th>Vehicle</th><th>House</th><th>Floor</th><th>Owner</th><th>Phone</th>
       {% if is_admin %}<th data-sortable="false"></th>{% endif %}
     </tr></thead>
     <tbody>
-      {% for h in houses %}
+      {% for v in vehicles %}
         <tr>
-          <td data-label="House"><a href="{{ url_for('house_detail', house_id=h.id) }}"><strong>{{ h.number }}</strong></a></td>
-          <td data-label="Floor">{{ floor_labels.get(h.floor, h.floor) if h.floor else '—' }}</td>
-          <td data-label="Owner">{{ h.owner_name or '—' }}</td>
+          <td data-label="Vehicle"><strong>{{ v.plate }}</strong></td>
+          <td data-label="House">{{ v.house_number }}</td>
+          <td data-label="Floor">{{ floor_labels.get(v.house_floor, v.house_floor) }}</td>
+          <td data-label="Owner">{{ v.owner_name }}</td>
           <td data-label="Phone" class="muted">
-            {% if h.phone and phone_visible(h) %}
-              <a href="tel:{{ h.phone | replace(' ', '') }}">{{ h.phone }}</a>
-            {% elif h.phone %}
+            {% if v.phone and phone_visible(v) %}
+              <a href="tel:{{ v.phone | replace(' ', '') }}">{{ v.phone }}</a>
+            {% elif v.phone %}
               <span class="muted">hidden</span>
             {% endif %}
           </td>
-          <td data-label="Vehicles">
-            {%- set plates = matched_plates.get(h.id) if q else None -%}
-            {%- if plates -%}
-              {%- for p in plates -%}
-                <span style="display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#fef3c7;padding:.05rem .35rem;border-radius:4px;margin:.05rem .15rem .05rem 0">{{ p }}</span>
-              {%- endfor -%}
-            {%- else -%}
-              {{ h.vehicle_count }}
-            {%- endif -%}
-          </td>
-          {% if is_admin %}<td data-label=""><a href="{{ url_for('house_detail', house_id=h.id) }}">edit →</a></td>{% endif %}
+          {% if is_admin %}
+            <td data-label="">
+              <form method="post" action="{{ url_for('admin_delete_vehicle', vehicle_id=v.vehicle_id) }}"
+                    onsubmit="return confirm('Remove vehicle {{ v.plate }} from house {{ v.house_number }}?')">
+                <button class="link link--danger">remove</button>
+              </form>
+            </td>
+          {% endif %}
         </tr>
       {% endfor %}
     </tbody>

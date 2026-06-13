@@ -43,31 +43,4 @@
   </form>
 </section>
 
-<section class="card">
-  <h2>Delete a house</h2>
-  <p class="muted">Removes the house and its registered vehicles. Past log entries remain (with the house shown as —).</p>
-  {% if houses %}
-    <table class="data">
-      <thead><tr><th>Number</th><th>Floor</th><th>Owner</th><th>Vehicles</th><th></th></tr></thead>
-      <tbody>
-        {% for h in houses %}
-          <tr>
-            <td data-label="Number"><strong>{{ h.number }}</strong></td>
-            <td data-label="Floor">{{ floor_labels.get(h.floor, h.floor) if h.floor else '—' }}</td>
-            <td data-label="Owner">{{ h.owner_name or '—' }}</td>
-            <td data-label="Vehicles">{{ h.vehicle_count }}</td>
-            <td data-label="">
-              <form method="post" action="{{ url_for('admin_delete_house', house_id=h.id) }}"
-                    onsubmit="return confirm('Delete {{ h.number }}{% if h.floor %} floor {{ h.floor }}{% endif %} and its {{ h.vehicle_count }} vehicle(s)?')">
-                <button class="link link--danger">delete</button>
-              </form>
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <p class="muted">No houses to delete.</p>
-  {% endif %}
-</section>
 {% endblock %}

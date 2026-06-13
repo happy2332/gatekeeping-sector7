@@ -261,134 +261,33 @@ def index():
     return render_template("index.html", inside=inside, recent=recent, q=q, kind_filter=kind_filter)
 
 
-@app.route("/houses")
-def houses_list():
+@app.route("/vehicles")
+def vehicles_list():
     db = get_db()
     q = request.args.get("q", "").strip()
 
+    base_select = """
+        SELECT v.id AS vehicle_id, v.plate,
+               h.id AS house_id, h.number AS house_number, h.floor AS house_floor,
+               h.owner_name, h.phone, h.phone_masked
+        FROM vehicles v JOIN houses h ON h.id = v.house_id
+    """
     if q:
         like = f"%{q.upper()}%"
         rows = db.execute(
+            base_select +
             """
-            SELECT h.*, COUNT(v.id) AS vehicle_count
-            FROM houses h LEFT JOIN vehicles v ON v.house_id = h.id
-            WHERE h.id IN (
-                SELECT h2.id FROM houses h2
-                LEFT JOIN vehicles v2 ON v2.house_id = h2.id
-                WHERE UPPER(h2.number) LIKE ?
-                   OR UPPER(h2.owner_name) LIKE ?
-                   OR UPPER(v2.plate) LIKE ?
-            )
-            GROUP BY h.id
-            ORDER BY h.number, h.floor
+            WHERE UPPER(v.plate) LIKE ?
+               OR UPPER(h.number) LIKE ?
+               OR UPPER(h.owner_name) LIKE ?
+            ORDER BY v.plate
             """,
             (like, like, like),
         ).fetchall()
     else:
-        rows = db.execute(
-            """
-            SELECT h.*, COUNT(v.id) AS vehicle_count
-            FROM houses h LEFT JOIN vehicles v ON v.house_id = h.id
-            GROUP BY h.id
-            ORDER BY h.number, h.floor
-            """
-        ).fetchall()
+        rows = db.execute(base_select + " ORDER BY v.plate").fetchall()
 
-    # When the user is searching, attach matched plates per house so the
-    # Vehicles column can show the *why* of the match, not just a count.
-    matched_plates = {}
-    if q:
-        like = f"%{q.upper()}%"
-        for r in db.execute(
-            """
-            SELECT v.house_id, v.plate
-            FROM vehicles v
-            WHERE UPPER(v.plate) LIKE ?
-            ORDER BY v.plate
-            """,
-            (like,),
-        ).fetchall():
-            matched_plates.setdefault(r["house_id"], []).append(r["plate"])
-
-    return render_template("houses.html", houses=rows, q=q,
-                           matched_plates=matched_plates)
-
-
-@app.route("/houses/<int:house_id>", methods=["GET", "POST"])
-def house_detail(house_id):
-    if request.method == "POST" and not role_at_least("admin"):
-        flash("Admin login required to edit houses", "error")
-        return redirect(url_for("login", next=request.path))
-    db = get_db()
-    house = db.execute("SELECT * FROM houses WHERE id = ?", (house_id,)).fetchone()
-    if not house:
-        flash("House not found", "error")
-        return redirect(url_for("houses_list"))
-
-    if request.method == "POST":
-        action = request.form.get("action")
-        if action == "add_vehicle":
-            plate = normalise_plate(request.form.get("plate", ""))
-            make_model = request.form.get("make_model", "").strip()
-            colour = request.form.get("colour", "").strip()
-            if not plate:
-                flash("Plate required", "error")
-            else:
-                try:
-                    db.execute(
-                        "INSERT INTO vehicles (house_id, plate, make_model, colour) VALUES (?, ?, ?, ?)",
-                        (house_id, plate, make_model or None, colour or None),
-                    )
-                    db.commit()
-                    flash(f"Added {plate}", "ok")
-                except sqlite3.IntegrityError:
-                    flash(f"{plate} is already registered", "error")
-        elif action == "delete_vehicle":
-            vid = int(request.form.get("vehicle_id"))
-            db.execute("DELETE FROM vehicles WHERE id = ? AND house_id = ?", (vid, house_id))
-            db.commit()
-            flash("Vehicle removed", "ok")
-        elif action == "update_house":
-            new_owner = request.form.get("owner_name", "").strip()
-            new_phone = request.form.get("phone", "").strip()
-            new_floor = request.form.get("floor", "").strip() or None
-            siblings = db.execute(
-                "SELECT id, floor FROM houses WHERE number = ? AND id != ?",
-                (house["number"], house_id),
-            ).fetchall()
-            sibling_has_floor = any(r["floor"] is not None for r in siblings)
-            sibling_no_floor = any(r["floor"] is None for r in siblings)
-            if not new_owner:
-                flash("Owner name is required", "error")
-            elif not new_phone:
-                flash("Phone number is required", "error")
-            elif new_floor is None and sibling_has_floor:
-                flash(f"House {house['number']} has other floor entries — keep this one's floor too", "error")
-            elif new_floor is not None and sibling_no_floor:
-                flash(f"House {house['number']} also has a no-floor entry — can't mix", "error")
-            else:
-                # If masking is disabled, preserve whatever was previously stored
-                # rather than silently flipping it to 0 — the column still has
-                # meaning for the day we re-enable the feature.
-                phone_masked = (
-                    1 if (PHONE_MASKING_ENABLED and request.form.get("phone_masked")) else
-                    house["phone_masked"] if not PHONE_MASKING_ENABLED else 0
-                )
-                try:
-                    db.execute(
-                        "UPDATE houses SET owner_name = ?, phone = ?, floor = ?, phone_masked = ? WHERE id = ?",
-                        (new_owner, new_phone, new_floor, phone_masked, house_id),
-                    )
-                    db.commit()
-                    flash("House updated", "ok")
-                except sqlite3.IntegrityError:
-                    flash(f"House {house['number']} (floor {new_floor}) already exists", "error")
-        return redirect(url_for("house_detail", house_id=house_id))
-
-    vehicles = db.execute(
-        "SELECT * FROM vehicles WHERE house_id = ? ORDER BY plate", (house_id,)
-    ).fetchall()
-    return render_template("house_detail.html", house=house, vehicles=vehicles)
+    return render_template("vehicles.html", vehicles=rows, q=q)
 
 
 @app.route("/houses/new", methods=["POST"])
@@ -396,11 +295,11 @@ def house_create():
     number = validate_house_number(request.form.get("number", ""))
     if number is None:
         flash(f"House number must be between {HOUSE_NUMBER_MIN} and {HOUSE_NUMBER_MAX}", "error")
-        return redirect(url_for("houses_list"))
+        return redirect(url_for("vehicles_list"))
     floor = validate_floor(request.form.get("floor", ""))
     if floor is None:
         flash("Please pick a floor", "error")
-        return redirect(url_for("houses_list"))
+        return redirect(url_for("vehicles_list"))
     # Owner / phone are validated *only* on the new-house path. The existing-house
     # path doesn't need them — owner+phone are taken from the existing record.
     owner_name = request.form.get("owner_name", "").strip()
@@ -425,7 +324,7 @@ def house_create():
             seen[norm] = raw
     if self_dups:
         flash("Duplicate vehicles in form: " + "; ".join(self_dups), "error")
-        return redirect(url_for("houses_list"))
+        return redirect(url_for("vehicles_list"))
 
     # Detect plates that already belong to other houses.
     conflicts = []
@@ -448,7 +347,7 @@ def house_create():
             conflicts.append(f"{r['plate']} is already registered to {host} — {owner}")
     if conflicts:
         flash("Vehicle conflict: " + "; ".join(conflicts), "error")
-        return redirect(url_for("houses_list"))
+        return redirect(url_for("vehicles_list"))
 
     # Look up whether this (number, floor) already exists.
     same_unit = db.execute(
@@ -464,7 +363,7 @@ def house_create():
         if not plates:
             owner = same_unit["owner_name"]
             flash(f"House {label} is already registered to {owner}. Add at least one vehicle to attach.", "error")
-            return redirect(url_for("houses_list"))
+            return redirect(url_for("vehicles_list"))
         try:
             for _, norm in plates:
                 db.execute(
@@ -475,19 +374,17 @@ def house_create():
         except sqlite3.IntegrityError as e:
             db.rollback()
             flash(f"Could not attach vehicles: {e}", "error")
-            return redirect(url_for("houses_list"))
+            return redirect(url_for("vehicles_list"))
         flash(f"Added {len(plates)} vehicle{'s' if len(plates) != 1 else ''} to house {label}", "ok")
-        if role_at_least("admin"):
-            return redirect(url_for("house_detail", house_id=same_unit["id"]))
-        return redirect(url_for("houses_list"))
+        return redirect(url_for("vehicles_list"))
 
     # Path B: brand-new house. Owner + phone are required here.
     if not owner_name:
         flash("Owner name is required", "error")
-        return redirect(url_for("houses_list"))
+        return redirect(url_for("vehicles_list"))
     if not phone:
         flash("Phone number is required", "error")
-        return redirect(url_for("houses_list"))
+        return redirect(url_for("vehicles_list"))
 
     try:
         cur = db.execute(
@@ -510,13 +407,11 @@ def house_create():
     except sqlite3.IntegrityError as e:
         db.rollback()
         flash(f"Could not save house: {e}", "error")
-        return redirect(url_for("houses_list"))
+        return redirect(url_for("vehicles_list"))
 
     extra = f" with {len(plates)} vehicle{'s' if len(plates) != 1 else ''}" if plates else ""
     flash(f"Registered house {label}{extra}", "ok")
-    if role_at_least("admin"):
-        return redirect(url_for("house_detail", house_id=new_house_id))
-    return redirect(url_for("houses_list"))
+    return redirect(url_for("vehicles_list"))
 
 
 @app.route("/gate")
@@ -821,29 +716,37 @@ def admin():
             """
         ).fetchone()["c"],
     }
-    houses = db.execute(
-        """
-        SELECT h.*, COUNT(v.id) AS vehicle_count
-        FROM houses h LEFT JOIN vehicles v ON v.house_id = h.id
-        GROUP BY h.id ORDER BY h.number, h.floor
-        """
-    ).fetchall()
-    return render_template("admin.html", stats=stats, houses=houses)
+    return render_template("admin.html", stats=stats)
 
 
-@app.post("/admin/houses/<int:house_id>/delete")
+@app.post("/admin/vehicles/<int:vehicle_id>/delete")
 @admin_required
-def admin_delete_house(house_id):
+def admin_delete_vehicle(vehicle_id):
     db = get_db()
-    h = db.execute("SELECT number, floor FROM houses WHERE id = ?", (house_id,)).fetchone()
-    if not h:
-        flash("House not found", "error")
-        return redirect(url_for("admin"))
-    db.execute("DELETE FROM houses WHERE id = ?", (house_id,))
-    db.commit()
-    label = h["number"] + (f" floor {h['floor']}" if h["floor"] else "")
-    flash(f"Deleted house {label} and its vehicles", "ok")
-    return redirect(url_for("admin"))
+    row = db.execute(
+        "SELECT v.plate, h.id AS house_id, h.number AS house_number "
+        "FROM vehicles v JOIN houses h ON h.id = v.house_id "
+        "WHERE v.id = ?",
+        (vehicle_id,),
+    ).fetchone()
+    if not row:
+        flash("Vehicle not found", "error")
+        return redirect(url_for("vehicles_list"))
+    db.execute("DELETE FROM vehicles WHERE id = ?", (vehicle_id,))
+    # If this was the house's last vehicle, drop the house too — fully
+    # vehicle-centric model: a house only exists while it has vehicles.
+    remaining = db.execute(
+        "SELECT COUNT(*) c FROM vehicles WHERE house_id = ?",
+        (row["house_id"],),
+    ).fetchone()["c"]
+    if remaining == 0:
+        db.execute("DELETE FROM houses WHERE id = ?", (row["house_id"],))
+        db.commit()
+        flash(f"Removed vehicle {row['plate']} (house {row['house_number']} had no other vehicles, also deleted)", "ok")
+    else:
+        db.commit()
+        flash(f"Removed vehicle {row['plate']} from house {row['house_number']}", "ok")
+    return redirect(url_for("vehicles_list"))
 
 
 @app.post("/admin/logs/clear")

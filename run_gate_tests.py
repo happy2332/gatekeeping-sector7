@@ -57,36 +57,30 @@ def section(title):
     print(f"\n=== {title} ===")
 
 
-def get_house_id(number, floor=None):
-    _, body, _ = get("/houses")
-    pattern = r'<strong>' + re.escape(number) + r'</strong>(?:</a>)?'
-    if floor:
-        pattern += r'\s*</td>\s*<td[^>]*>' + re.escape(floor) + r'</td>'
-    pattern += r'.*?/houses/(\d+)'
-    m = re.search(pattern, body, re.S)
-    return int(m.group(1)) if m else None
+def get_house_id(number, floor):
+    """Use the lookup API since the per-house URL is gone."""
+    _, body, _ = get(f"/api/houses/lookup?number={number}&floor={floor.lower()}")
+    data = json.loads(body)
+    return data["matches"][0]["id"] if data["matches"] else None
 
 
 # -----------------------------------------------------------------
 # Setup: log in as admin (so we can create houses), then test as guard.
 section("SETUP")
 post("/login", form={"password": ADMIN_PASSWORD})
-post("/houses/new", form={"number": "101", "floor": "ground", "owner_name": "Sharma", "phone": "9000000001"})
-post("/houses/new", form={"number": "102", "floor": "first",  "owner_name": "Kapoor", "phone": "9000000002"})
-post("/houses/new", form={"number": "102", "floor": "second", "owner_name": "Roy",    "phone": "9000000003"})
-post("/houses/new", form={"number": "201", "floor": "ground", "owner_name": "Iyer",   "phone": "9000000004"})
+# Each house registered with its initial vehicle inline (the new model).
+post("/houses/new", form={"number": "101", "floor": "ground", "owner_name": "Sharma", "phone": "9000000001", "plate": "DL3CAB1234"})
+post("/houses/new", form={"number": "102", "floor": "first",  "owner_name": "Kapoor", "phone": "9000000002", "plate": "DL8CAF7788"})
+post("/houses/new", form={"number": "102", "floor": "second", "owner_name": "Roy",    "phone": "9000000003", "plate": "DL12CK4321"})
+post("/houses/new", form={"number": "201", "floor": "ground", "owner_name": "Iyer",   "phone": "9000000004", "plate": "HR26DK1234"})
 
+# Lookup house ids for any tests that still need them (visitor logging at the gate).
 a101 = get_house_id("101", "Ground")
 a102_1 = get_house_id("102", "First")
 a102_2 = get_house_id("102", "Second")
 b201 = get_house_id("201", "Ground")
 check("can resolve all 4 house ids", all([a101, a102_1, a102_2, b201]),
       f"a101={a101} a102_1={a102_1} a102_2={a102_2} b201={b201}")
-
-post(f"/houses/{a101}", form={"action": "add_vehicle", "plate": "DL3CAB1234"})
-post(f"/houses/{a102_1}", form={"action": "add_vehicle", "plate": "DL8CAF7788"})
-post(f"/houses/{a102_2}", form={"action": "add_vehicle", "plate": "DL12CK4321"})
-post(f"/houses/{b201}", form={"action": "add_vehicle", "plate": "HR26DK1234"})
 
 
 # -----------------------------------------------------------------

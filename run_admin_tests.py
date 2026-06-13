@@ -70,29 +70,22 @@ def check(name, condition, detail=""):
 def section(title): print(f"\n=== {title} ===")
 
 
-def get_house_id(number, floor=None):
-    _, body = follow("/houses")
-    pat = r'<strong>' + re.escape(number) + r'</strong>(?:</a>)?'
-    if floor:
-        pat += r'\s*</td>\s*<td[^>]*>' + re.escape(floor) + r'</td>'
-    pat += r'.*?/houses/(\d+)'
-    m = re.search(pat, body, re.S)
-    return int(m.group(1)) if m else None
+def get_house_id(number, floor):
+    status, body, _ = request("GET", f"/api/houses/lookup?number={number}&floor={floor.lower()}")
+    data = json.loads(body)
+    return data["matches"][0]["id"] if data["matches"] else None
 
 
 # ----- setup data -----
 section("SETUP")
 # Log in as admin to seed houses + vehicles, then log out before AUTH section.
 post("/login", form={"password": ADMIN_PASSWORD})
-post("/houses/new", form={"number": "101", "floor": "ground", "owner_name": "Sharma", "phone": "9000000001"})
-post("/houses/new", form={"number": "102", "floor": "first",  "owner_name": "Kapoor", "phone": "9000000002"})
-post("/houses/new", form={"number": "201", "floor": "ground", "owner_name": "Iyer",   "phone": "9000000004"})
+post("/houses/new", form={"number": "101", "floor": "ground", "owner_name": "Sharma", "phone": "9000000001", "plate": "DL3CAB1234"})
+post("/houses/new", form={"number": "102", "floor": "first",  "owner_name": "Kapoor", "phone": "9000000002", "plate": "DL8CAF7788"})
+post("/houses/new", form={"number": "201", "floor": "ground", "owner_name": "Iyer",   "phone": "9000000004", "plate": "HR26DK9999"})
 a101 = get_house_id("101", "Ground")
 a102 = get_house_id("102", "First")
 b201 = get_house_id("201", "Ground")
-post(f"/houses/{a101}", form={"action": "add_vehicle", "plate": "DL3CAB1234"})
-post(f"/houses/{a102}", form={"action": "add_vehicle", "plate": "DL8CAF7788"})
-post(f"/houses/{b201}", form={"action": "add_vehicle", "plate": "HR26DK9999"})
 post("/api/log", json_body={"plate": "DL3CAB1234", "direction": "in", "kind": "resident", "house_id": a101})
 post("/api/log", json_body={"plate": "DL3CAB1234", "direction": "out", "kind": "resident", "house_id": a101})
 post("/api/log", json_body={"plate": "X1Y2", "direction": "in", "kind": "visitor", "house_id": int(a101)})
@@ -114,9 +107,9 @@ status, _, _ = get("/")
 check("resident: GET / works without login", status == 200)
 status, _, _ = get("/log")
 check("resident: GET /log works without login", status == 200)
-status, _, _ = get("/houses")
-check("resident: GET /houses works without login", status == 200)
-status, body, _ = get("/houses")
+status, _, _ = get("/vehicles")
+check("resident: GET /vehicles works without login", status == 200)
+status, body, _ = get("/vehicles")
 check("resident: 'Add a vehicle' form IS shown (residents can register)",
       "Add a vehicle" in body)
 check("resident: 'edit →' link NOT shown",
@@ -169,30 +162,27 @@ post("/logout")
 post("/login", form={"password": ADMIN_PASSWORD})
 
 
-# ----- delete house -----
-section("DELETE HOUSE")
-post(f"/admin/houses/{b201}/delete")
-# Re-fetch admin (a second GET) so the flash about "Deleted house B-201..." is gone
-follow("/admin")
-_, body = follow("/admin")
-m = re.search(r'<table class="data".*?</table>', body, re.S)
-admin_table = m.group(0) if m else ""
-check("delete house: B-201 no longer in admin's house table",
-      "B-201" not in admin_table, f"table excerpt: {admin_table[:200]}")
-# Same for the /houses list (also has flashes)
-follow("/houses")
-_, body = follow("/houses")
-m = re.search(r'<table class="data".*?</table>', body, re.S)
-houses_table = m.group(0) if m else ""
-check("delete house: B-201 no longer in /houses table",
-      "B-201" not in houses_table)
-# Cascading delete: B-201's only registered vehicle (HR26DK9999) should not be searchable on /gate
+# ----- delete vehicle (auto-deletes house when last vehicle) -----
+section("DELETE VEHICLE")
+# Find HR26DK9999's vehicle id from /vehicles
+_, vbody = follow("/vehicles")
+m = re.search(r'HR26DK9999.*?/admin/vehicles/(\d+)/delete', vbody, re.S)
+v_id = int(m.group(1)) if m else None
+check("can resolve HR26DK9999 vehicle id", v_id is not None)
+post(f"/admin/vehicles/{v_id}/delete")
+follow("/vehicles")  # consume flash
+_, vbody = follow("/vehicles")
+check("vehicle HR26DK9999 removed", "HR26DK9999" not in vbody)
+# 201 had only one vehicle, so the house is gone too (auto-delete)
+check("house 201 also deleted (was its last vehicle)",
+      not re.search(r"<strong>201</strong>", vbody))
+# Search confirms it's not registered anywhere
 status, body, _ = get("/api/vehicles/search?q=HR26DK")
-check("delete house: cascading delete drops the registered vehicle",
+check("removed plate not searchable",
       json.loads(body) == [])
-# /log still renders (no 500 from dangling refs)
+# /log still renders (movement log entries with the now-deleted house keep working)
 _, body = follow("/log")
-check("delete house: /log still renders", "<table" in body)
+check("/log still renders after vehicle/house removal", "<table" in body)
 
 
 # ----- clear older than N days -----
