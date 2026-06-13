@@ -156,7 +156,7 @@ target = next(d for d in data if d["plate"] == "DL3CAB1234")
 check("after IN, search marks vehicle currently_inside=True", target["currently_inside"] is True)
 
 # Inside view lists this vehicle
-_, body, _ = get("/")
+_, body, _ = get("/inside")
 check("Inside view lists DL3CAB1234", "DL3CAB1234" in body)
 check("Inside view marks it as resident", re.search(r"DL3CAB1234.*?badge--resident", body, re.S))
 check("Inside view shows house 101", re.search(r"DL3CAB1234.*?101", body, re.S))
@@ -173,7 +173,7 @@ target = next(d for d in data if d["plate"] == "DL3CAB1234")
 check("after OUT, search marks vehicle currently_inside=False", target["currently_inside"] is False)
 
 # Inside view should no longer list it
-_, body, _ = get("/")
+_, body, _ = get("/inside")
 check("Inside view no longer lists DL3CAB1234 after OUT",
       not re.search(r"DL3CAB1234</strong></td>\s*<td[^>]*><span class=\"badge badge--resident\"", body, re.S))
 
@@ -189,7 +189,7 @@ status, _, _ = post("/api/log", json_body={
 })
 check("POST visitor IN returns 200", status == 200)
 
-_, body, _ = get("/")
+_, body, _ = get("/inside")
 check("Inside view lists visitor plate", "UP14XY9999" in body)
 check("Inside view shows host house owner in Owner column", "Sharma" in body)
 check("visitor row tagged with badge--visitor",
@@ -202,7 +202,7 @@ status, _, _ = post("/api/log", json_body={
     "house_number": "201", "visitor_name": "Pooja",
 })
 check("POST visitor IN by house_number string returns 200", status == 200)
-_, body, _ = get("/")
+_, body, _ = get("/inside")
 check("visitor by house_number attached to 201",
       re.search(r"MH12AA1111.*?201", body, re.S))
 
@@ -310,14 +310,14 @@ section("CURRENTLY-INSIDE EDGE CASE")
 # Log a fresh plate IN then OUT — should not appear in Inside
 post("/api/log", json_body={"plate": "TEST00001", "direction": "in", "kind": "visitor", "house_id": a101})
 post("/api/log", json_body={"plate": "TEST00001", "direction": "out", "kind": "visitor", "house_id": a101})
-_, body, _ = get("/")
+_, body, _ = get("/inside")
 inside_section = re.search(r"<h1>Currently inside.*?</section>", body, re.S).group(0)
 check("vehicle that went IN then OUT is not in 'currently inside'",
       "TEST00001" not in inside_section)
 
 # Log OUT directly (no prior IN) — appears in log but NOT in Inside
 post("/api/log", json_body={"plate": "TEST00002", "direction": "out", "kind": "visitor", "house_id": a101})
-_, body, _ = get("/")
+_, body, _ = get("/inside")
 inside_section = re.search(r"<h1>Currently inside.*?</section>", body, re.S).group(0)
 check("vehicle with only an OUT event is not in 'currently inside'",
       "TEST00002" not in inside_section)

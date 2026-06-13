@@ -96,6 +96,16 @@ def inject_role():
     }
 
 
+def role_home_url():
+    """Where to send a user after a successful POST. Admin sees the vehicles
+    list; guards land on the gate; residents go back to the search page."""
+    if role_at_least("admin"):
+        return url_for("vehicles_list")
+    if role_at_least("guard"):
+        return url_for("gate")
+    return url_for("index")
+
+
 def _parse_ts(value):
     if not value:
         return None
@@ -211,6 +221,32 @@ def normalise_plate(plate: str) -> str:
 
 @app.route("/")
 def index():
+    """Public landing page — exact-plate search for residents."""
+    db = get_db()
+    q_raw = request.args.get("q", "").strip()
+    q_norm = normalise_plate(q_raw)
+    found = None
+    not_found = False
+    if q_norm:
+        found = db.execute(
+            """
+            SELECT v.plate, h.number AS house_number, h.floor AS house_floor,
+                   h.owner_name, h.phone, h.phone_masked
+            FROM vehicles v JOIN houses h ON h.id = v.house_id
+            WHERE UPPER(v.plate) = ?
+            """,
+            (q_norm,),
+        ).fetchone()
+        not_found = found is None
+    return render_template(
+        "search_landing.html",
+        q=q_raw, found=found, not_found=not_found,
+    )
+
+
+@app.route("/inside")
+@admin_required
+def inside_view():
     db = get_db()
     q = request.args.get("q", "").strip()
     kind_filter = request.args.get("kind", "").strip().lower()
@@ -266,7 +302,7 @@ def index():
     ).fetchone()["c"]
     vehicles_total = db.execute("SELECT COUNT(*) AS c FROM vehicles").fetchone()["c"]
     return render_template(
-        "index.html",
+        "inside.html",
         inside=inside, recent=recent, q=q, kind_filter=kind_filter,
         inside_total=inside_total,
         vehicles_total=vehicles_total,
@@ -274,6 +310,7 @@ def index():
 
 
 @app.route("/vehicles")
+@admin_required
 def vehicles_list():
     db = get_db()
     q = request.args.get("q", "").strip()
@@ -315,11 +352,11 @@ def house_create():
     number = validate_house_number(request.form.get("number", ""))
     if number is None:
         flash(f"House number must be between {HOUSE_NUMBER_MIN} and {HOUSE_NUMBER_MAX}", "error")
-        return redirect(url_for("vehicles_list"))
+        return redirect(role_home_url())
     floor = validate_floor(request.form.get("floor", ""))
     if floor is None:
         flash("Please pick a floor", "error")
-        return redirect(url_for("vehicles_list"))
+        return redirect(role_home_url())
     # Owner / phone are validated *only* on the new-house path. The existing-house
     # path doesn't need them — owner+phone are taken from the existing record.
     owner_name = request.form.get("owner_name", "").strip()
@@ -344,7 +381,7 @@ def house_create():
             seen[norm] = raw
     if self_dups:
         flash("Duplicate vehicles in form: " + "; ".join(self_dups), "error")
-        return redirect(url_for("vehicles_list"))
+        return redirect(role_home_url())
 
     # Detect plates that already belong to other houses.
     conflicts = []
@@ -367,7 +404,7 @@ def house_create():
             conflicts.append(f"{r['plate']} is already registered to {host} — {owner}")
     if conflicts:
         flash("Vehicle conflict: " + "; ".join(conflicts), "error")
-        return redirect(url_for("vehicles_list"))
+        return redirect(role_home_url())
 
     # Look up whether this (number, floor) already exists.
     same_unit = db.execute(
@@ -383,7 +420,7 @@ def house_create():
         if not plates:
             owner = same_unit["owner_name"]
             flash(f"House {label} is already registered to {owner}. Add at least one vehicle to attach.", "error")
-            return redirect(url_for("vehicles_list"))
+            return redirect(role_home_url())
         try:
             for _, norm in plates:
                 db.execute(
@@ -394,17 +431,17 @@ def house_create():
         except sqlite3.IntegrityError as e:
             db.rollback()
             flash(f"Could not attach vehicles: {e}", "error")
-            return redirect(url_for("vehicles_list"))
+            return redirect(role_home_url())
         flash(f"Added {len(plates)} vehicle{'s' if len(plates) != 1 else ''} to house {label}", "ok")
-        return redirect(url_for("vehicles_list"))
+        return redirect(role_home_url())
 
     # Path B: brand-new house. Owner + phone are required here.
     if not owner_name:
         flash("Owner name is required", "error")
-        return redirect(url_for("vehicles_list"))
+        return redirect(role_home_url())
     if not phone:
         flash("Phone number is required", "error")
-        return redirect(url_for("vehicles_list"))
+        return redirect(role_home_url())
 
     try:
         cur = db.execute(
@@ -427,11 +464,11 @@ def house_create():
     except sqlite3.IntegrityError as e:
         db.rollback()
         flash(f"Could not save house: {e}", "error")
-        return redirect(url_for("vehicles_list"))
+        return redirect(role_home_url())
 
     extra = f" with {len(plates)} vehicle{'s' if len(plates) != 1 else ''}" if plates else ""
     flash(f"Registered house {label}{extra}", "ok")
-    return redirect(url_for("vehicles_list"))
+    return redirect(role_home_url())
 
 
 @app.route("/gate")
@@ -642,6 +679,7 @@ def api_log():
 
 
 @app.route("/log")
+@admin_required
 def log_view():
     db = get_db()
     q = request.args.get("q", "").strip()

@@ -102,18 +102,26 @@ check("/admin without login redirects", status in (301, 302) and "/login" in (lo
 status, _, _ = get("/login")
 check("/login renders", status == 200)
 
-# Resident (no login) can read /, /log, /houses
+# Resident (no login) can ONLY hit /, /vehicles/new, /api/houses/lookup,
+# and /api/vehicles/search. Everything else (/log, /vehicles list, /inside,
+# /gate) redirects them to login.
 status, _, _ = get("/")
 check("resident: GET / works without login", status == 200)
-status, _, _ = get("/log")
-check("resident: GET /log works without login", status == 200)
-status, _, _ = get("/vehicles")
-check("resident: GET /vehicles works without login", status == 200)
-status, body, _ = get("/vehicles")
-check("resident: '+ Add vehicle' button IS shown on /vehicles",
-      "/vehicles/new" in body and "Add vehicle" in body)
-check("resident: 'edit →' link NOT shown",
-      "edit →" not in body)
+status, _, _ = get("/vehicles/new")
+check("resident: GET /vehicles/new works without login", status == 200)
+status, _, loc = get("/log")
+check("resident: GET /log redirects (admin-only)",
+      status in (301, 302) and "/login" in (loc or ""))
+status, _, loc = get("/vehicles")
+check("resident: GET /vehicles redirects (admin-only)",
+      status in (301, 302) and "/login" in (loc or ""))
+status, _, loc = get("/inside")
+check("resident: GET /inside redirects (admin-only)",
+      status in (301, 302) and "/login" in (loc or ""))
+# The search landing page exists
+status, body, _ = get("/")
+check("resident: search landing has 'Find a vehicle' heading",
+      "Find a vehicle" in body)
 # Resident cannot post log
 status, _, _ = post("/api/log",
     json_body={"plate": "ZZZ", "direction": "in", "kind": "visitor", "house_number": "101"})

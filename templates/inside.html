@@ -11,13 +11,13 @@
     <input name="q" value="{{ q or '' }}" placeholder="Search by vehicle, house or owner">
     {% if kind_filter %}<input type="hidden" name="kind" value="{{ kind_filter }}">{% endif %}
     <button class="btn" style="flex:0 0 auto">Search</button>
-    {% if q or kind_filter %}<a class="btn" style="flex:0 0 auto;background:#6b7280" href="{{ url_for('index') }}">Clear</a>{% endif %}
+    {% if q or kind_filter %}<a class="btn" style="flex:0 0 auto;background:#6b7280" href="{{ url_for('inside_view') }}">Clear</a>{% endif %}
   </form>
   {% macro qs(kind=None) -%}
     {%- set parts = [] -%}
     {%- if q %}{% set _ = parts.append('q=' ~ q) %}{% endif -%}
     {%- if kind %}{% set _ = parts.append('kind=' ~ kind) %}{% endif -%}
-    {{- ('?' ~ parts|join('&')) if parts else url_for('index') -}}
+    {{- ('?' ~ parts|join('&')) if parts else url_for('inside_view') -}}
   {%- endmacro %}
   <div class="pills">
     <span class="label">Type:</span>
