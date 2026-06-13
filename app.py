@@ -265,13 +265,11 @@ def index():
         """
     ).fetchone()["c"]
     vehicles_total = db.execute("SELECT COUNT(*) AS c FROM vehicles").fetchone()["c"]
-    houses_total = db.execute("SELECT COUNT(*) AS c FROM houses").fetchone()["c"]
     return render_template(
         "index.html",
         inside=inside, recent=recent, q=q, kind_filter=kind_filter,
         inside_total=inside_total,
         vehicles_total=vehicles_total,
-        houses_total=houses_total,
     )
 
 
@@ -279,6 +277,8 @@ def index():
 def vehicles_list():
     db = get_db()
     q = request.args.get("q", "").strip()
+    vehicles_total = db.execute("SELECT COUNT(*) AS c FROM vehicles").fetchone()["c"]
+    houses_total = db.execute("SELECT COUNT(*) AS c FROM houses").fetchone()["c"]
 
     base_select = """
         SELECT v.id AS vehicle_id, v.plate,
@@ -301,7 +301,8 @@ def vehicles_list():
     else:
         rows = db.execute(base_select + " ORDER BY v.plate").fetchall()
 
-    return render_template("vehicles.html", vehicles=rows, q=q)
+    return render_template("vehicles.html", vehicles=rows, q=q,
+                           vehicles_total=vehicles_total, houses_total=houses_total)
 
 
 @app.route("/vehicles/new")

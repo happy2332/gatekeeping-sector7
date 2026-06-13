@@ -3,9 +3,17 @@
 {% block content %}
 <section class="card">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
-    <h1 style="margin:0">Vehicles</h1>
+    <h1 style="margin:0">Vehicles
+      <span class="badge" style="font-size:.85rem;vertical-align:middle;background:#dbeafe;color:#1e40af;border-color:#bfdbfe">
+        {{ vehicles_total }} vehicle{{ '' if vehicles_total == 1 else 's' }}
+      </span>
+    </h1>
     <a class="btn" href="{{ url_for('vehicle_new') }}" style="flex:0 0 auto;text-decoration:none">+ Add vehicle</a>
   </div>
+  <p class="muted" style="margin:.2rem 0 .4rem;font-size:.9rem">
+    {{ houses_total }} house{{ '' if houses_total == 1 else 's' }} registered
+    so far across the pocket.
+  </p>
   <form method="get" class="row" style="margin:.7rem 0 .4rem">
     <input name="q" value="{{ q or '' }}" placeholder="Search by vehicle, house or owner">
     <button class="btn" style="flex:0 0 auto">Search</button>
