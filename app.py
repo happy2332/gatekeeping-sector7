@@ -717,6 +717,53 @@ def api_house(house_id):
     )
 
 
+@app.get("/api/recent-movements")
+def api_recent_movements():
+    """Last N movements for the gate-tab live table."""
+    try:
+        limit = int(request.args.get("limit", "10"))
+    except ValueError:
+        limit = 10
+    limit = max(1, min(50, limit))
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT m.id, m.plate, m.kind, m.direction, m.ts,
+               h.number AS house_number, h.floor AS house_floor,
+               m.visitor_house AS unregistered_house
+        FROM movements m
+        LEFT JOIN houses h ON h.id = m.house_id
+        ORDER BY m.id DESC
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    out = []
+    for r in rows:
+        if r["house_number"]:
+            host = r["house_number"]
+            if r["house_floor"]:
+                host += f" · {FLOOR_LABELS.get(r['house_floor'], r['house_floor'])} Floor"
+        elif r["unregistered_house"]:
+            parts = (r["unregistered_house"] or "").split(" ", 1)
+            host = parts[0]
+            if len(parts) > 1:
+                host += f" · {FLOOR_LABELS.get(parts[1], parts[1])} Floor"
+        else:
+            host = "—"
+        ts_dt = _parse_ts(r["ts"])
+        out.append({
+            "id": r["id"],
+            "plate": r["plate"],
+            "kind": r["kind"],
+            "direction": r["direction"],
+            "host": host,
+            "time": ts_dt.strftime("%I:%M %p").lstrip("0") if ts_dt else "",
+            "date": ts_dt.strftime("%d %b") if ts_dt else "",
+        })
+    return jsonify(out)
+
+
 @app.post("/api/log")
 @guard_required
 def api_log():
