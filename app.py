@@ -203,6 +203,7 @@ def init_db():
             visitor_name TEXT,
             visitor_phone TEXT,
             note TEXT,
+            visitor_house TEXT,
             ts TEXT NOT NULL
         );
 
@@ -211,6 +212,10 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_vehicles_house ON vehicles(house_id);
         """
     )
+    # Backfill the visitor_house column on older databases.
+    cols = {row[1] for row in db.execute("PRAGMA table_info(movements)").fetchall()}
+    if "visitor_house" not in cols:
+        db.execute("ALTER TABLE movements ADD COLUMN visitor_house TEXT")
     db.commit()
     db.close()
 
@@ -249,12 +254,19 @@ def index():
         ).fetchone()
 
         # 2) Exact match in visitor movements (plates not in the vehicles table).
+        # If house_id is set, owner+phone come from the registered houses row.
+        # If house_id is NULL, the guard typed visitor_name/visitor_phone/
+        # visitor_house onto the movement itself.
         if not found:
             found = db.execute(
                 """
                 SELECT m.plate AS plate,
-                       h.number AS house_number, h.floor AS house_floor,
-                       h.owner_name, h.phone, h.phone_masked,
+                       h.number AS house_number,
+                       h.floor AS house_floor,
+                       COALESCE(h.owner_name, m.visitor_name) AS owner_name,
+                       COALESCE(h.phone, m.visitor_phone) AS phone,
+                       h.phone_masked AS phone_masked,
+                       m.visitor_house AS unregistered_house,
                        'visitor' AS kind,
                        m2.direction AS last_direction
                 FROM movements m
@@ -298,7 +310,8 @@ def index():
                 """
                 SELECT m.plate AS plate,
                        h.number AS house_number, h.floor AS house_floor,
-                       h.owner_name,
+                       COALESCE(h.owner_name, m.visitor_name) AS owner_name,
+                       m.visitor_house AS unregistered_house,
                        'visitor' AS kind,
                        m.direction AS last_direction
                 FROM movements m
@@ -339,9 +352,11 @@ def inside_view():
         where_extra = (
             "AND (UPPER(m.plate) LIKE ?"
             "  OR UPPER(h.number) LIKE ?"
-            "  OR UPPER(h.owner_name) LIKE ?)"
+            "  OR UPPER(h.owner_name) LIKE ?"
+            "  OR UPPER(m.visitor_name) LIKE ?"
+            "  OR UPPER(m.visitor_house) LIKE ?)"
         )
-        params = [like, like, like]
+        params = [like, like, like, like, like]
     if kind_filter:
         where_extra += " AND m.kind = ?"
         params.append(kind_filter)
@@ -349,10 +364,11 @@ def inside_view():
         f"""
         SELECT m.plate, m.kind, m.ts, m.house_id,
                h.number AS house_number, h.floor AS house_floor,
-               h.owner_name AS house_owner,
-               h.phone AS house_phone,
+               COALESCE(h.owner_name, m.visitor_name) AS house_owner,
+               COALESCE(h.phone, m.visitor_phone) AS house_phone,
                h.phone_masked AS house_phone_masked,
-               m.visitor_name
+               m.visitor_name,
+               m.visitor_house AS unregistered_house
         FROM movements m
         LEFT JOIN houses h ON h.id = m.house_id
         WHERE m.id IN (
@@ -366,7 +382,8 @@ def inside_view():
     ).fetchall()
     recent = db.execute(
         """
-        SELECT m.*, h.number AS house_number, h.floor AS house_floor
+        SELECT m.*, h.number AS house_number, h.floor AS house_floor,
+               m.visitor_house AS unregistered_house
         FROM movements m
         LEFT JOIN houses h ON h.id = m.house_id
         ORDER BY m.id DESC
@@ -722,10 +739,43 @@ def api_log():
         return jsonify({"error": f"{plate} is not inside"}), 409
 
     house_id = data.get("house_id")
-    house_number = (data.get("house_number") or "").strip().upper()
-    if not house_id and house_number:
-        row = db.execute("SELECT id FROM houses WHERE number = ?", (house_number,)).fetchone()
-        house_id = row["id"] if row else None
+    house_number_raw = data.get("house_number")
+    house_floor_raw = data.get("house_floor")
+
+    # Visitor metadata for an unregistered house (kept on the movement row;
+    # NEVER auto-creates a houses row — that's owner-driven only).
+    visitor_house_label = None
+    visitor_name_for_movement = None
+    visitor_phone_for_movement = None
+
+    if not house_id and house_number_raw:
+        number = validate_house_number(house_number_raw)
+        if number is None:
+            return jsonify({
+                "error": f"House number must be between {HOUSE_NUMBER_MIN} and {HOUSE_NUMBER_MAX}"
+            }), 400
+        floor = validate_floor(house_floor_raw or "")
+        if floor is None:
+            return jsonify({"error": "Floor is required"}), 400
+        existing = db.execute(
+            "SELECT id FROM houses WHERE number = ? AND floor = ?",
+            (number, floor),
+        ).fetchone()
+        if existing:
+            house_id = existing["id"]
+        else:
+            # Visitor at an unregistered (number, floor). Don't create a houses
+            # row — only the resident's own /vehicles/new flow does that.
+            # Capture owner+phone on the movement so the audit log is complete.
+            owner_name = (data.get("owner_name") or "").strip()
+            phone_str = (data.get("phone") or "").strip()
+            if not owner_name:
+                return jsonify({"error": "Owner name is required"}), 400
+            if not phone_str:
+                return jsonify({"error": "Phone number is required"}), 400
+            visitor_house_label = f"{number} {floor}"
+            visitor_name_for_movement = owner_name
+            visitor_phone_for_movement = phone_str
 
     vehicle_id = None
     if kind == "resident":
@@ -734,13 +784,15 @@ def api_log():
             vehicle_id = v["id"]
             house_id = house_id or v["house_id"]
 
-    if not house_id:
+    if not house_id and not visitor_house_label:
         return jsonify({"error": "House is required for every log entry"}), 400
 
     db.execute(
         """
-        INSERT INTO movements (house_id, vehicle_id, plate, kind, direction, visitor_name, visitor_phone, note, ts)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO movements (
+            house_id, vehicle_id, plate, kind, direction,
+            visitor_name, visitor_phone, visitor_house, note, ts
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             house_id,
@@ -748,8 +800,9 @@ def api_log():
             plate,
             kind,
             direction,
-            (data.get("visitor_name") or "").strip() or None,
-            (data.get("visitor_phone") or "").strip() or None,
+            visitor_name_for_movement,
+            visitor_phone_for_movement,
+            visitor_house_label,
             (data.get("note") or "").strip() or None,
             now_ist_str(),
         ),
@@ -776,9 +829,11 @@ def log_view():
         clauses.append(
             "(UPPER(m.plate) LIKE ?"
             " OR UPPER(h.number) LIKE ?"
-            " OR UPPER(h.owner_name) LIKE ?)"
+            " OR UPPER(h.owner_name) LIKE ?"
+            " OR UPPER(m.visitor_name) LIKE ?"
+            " OR UPPER(m.visitor_house) LIKE ?)"
         )
-        params += [like, like, like]
+        params += [like, like, like, like, like]
     if kind_filter:
         clauses.append("m.kind = ?")
         params.append(kind_filter)
@@ -789,9 +844,10 @@ def log_view():
     rows = db.execute(
         f"""
         SELECT m.*, h.number AS house_number, h.floor AS house_floor,
-               h.owner_name AS house_owner,
-               h.phone AS house_phone,
-               h.phone_masked AS house_phone_masked
+               COALESCE(h.owner_name, m.visitor_name) AS house_owner,
+               COALESCE(h.phone, m.visitor_phone) AS house_phone,
+               h.phone_masked AS house_phone_masked,
+               m.visitor_house AS unregistered_house
         FROM movements m LEFT JOIN houses h ON h.id = m.house_id
         {where}
         ORDER BY m.id DESC

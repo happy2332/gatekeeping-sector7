@@ -30,6 +30,10 @@
         <dd>
           {% if found.house_number %}
             {{ found.house_number }}{% if found.house_floor %} · {{ floor_labels.get(found.house_floor, found.house_floor) }} Floor{% endif %}
+          {% elif found.unregistered_house %}
+            {%- set parts = found.unregistered_house.split(' ', 1) -%}
+            {{ parts[0] }}{% if parts|length > 1 %} · {{ floor_labels.get(parts[1], parts[1]) }} Floor{% endif %}
+            <span class="muted" style="font-size:.8rem"> · not yet registered</span>
           {% else %}
             <span class="muted">—</span>
           {% endif %}
@@ -65,6 +69,11 @@
                 {% if r.house_number %}
                   {{ r.house_number }}{% if r.house_floor %} · {{ floor_labels.get(r.house_floor, r.house_floor) }} Floor{% endif %}
                   {% if r.owner_name %} · {{ r.owner_name }}{% endif %}
+                {% elif r.unregistered_house %}
+                  {%- set parts = r.unregistered_house.split(' ', 1) -%}
+                  {{ parts[0] }}{% if parts|length > 1 %} · {{ floor_labels.get(parts[1], parts[1]) }} Floor{% endif %}
+                  {% if r.owner_name %} · {{ r.owner_name }}{% endif %}
+                  <em style="font-style:normal">· not yet registered</em>
                 {% else %}
                   <em>no house on record</em>
                 {% endif %}

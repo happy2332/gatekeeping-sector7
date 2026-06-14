@@ -14,25 +14,55 @@
 
 <section id="visitorSection" class="card hidden">
   <h2>Log visitor vehicle</h2>
-  <p class="muted">Pick the house this visitor is going to.</p>
-
-  <input id="houseSearch" type="search" placeholder="House number" autocomplete="off">
-  <small id="houseSearchHelp" style="font-size:.85rem;display:none;color:#dc2626;font-weight:500">Pick a valid house from the list.</small>
-  <ul id="houseList" class="house-list">
-    {% for h in houses %}
-      <li data-id="{{ h.id }}" data-number="{{ h.number }}" data-floor="{{ h.floor or '' }}">
-        <strong>{{ h.number }}</strong>{% if h.floor %} <span class="badge">{{ floor_labels.get(h.floor, h.floor) }} Floor</span>{% endif %}
-        {% if h.owner_name %}<span class="muted"> — {{ h.owner_name }}</span>{% endif %}
-      </li>
-    {% endfor %}
-  </ul>
-  <p id="visitorChosen" class="muted"></p>
+  <p class="muted" style="margin:.2rem 0 .8rem">
+    Pick the house number and floor. If it's already registered, owner
+    auto-fills. If not, type the owner's name (and phone if you have it).
+  </p>
 
   <form id="visitorForm" class="grid">
-    <input id="visitorPlate" name="plate" placeholder="Vehicle number" required autocapitalize="characters" disabled>
-    <button id="visitorSubmit" type="submit" data-direction="in" class="btn btn--in" disabled>Check in</button>
+    <label class="field">
+      <span>House number</span>
+      <input id="visitorHouseNumber" name="number" type="number" list="visitorHouseNumbers"
+             placeholder="e.g. 633" required autocomplete="off"
+             inputmode="numeric"
+             min="{{ house_number_min }}" max="{{ house_number_max }}" step="1">
+      <small id="visitorHouseNumberHelp" style="font-size:.85rem;display:none;color:#dc2626;font-weight:500">House number must be between {{ house_number_min }} and {{ house_number_max }}.</small>
+      <datalist id="visitorHouseNumbers">
+        {% for n in range(house_number_min, house_number_max + 1) %}
+          <option value="{{ n }}"></option>
+        {% endfor %}
+      </datalist>
+    </label>
+    <label class="field">
+      <span>Floor</span>
+      <select id="visitorFloor" name="floor" required>
+        <option value="" disabled selected>Pick a floor</option>
+        {% for key in all_floors %}
+          <option value="{{ key }}">{{ floor_labels[key] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <p id="visitorLookupBanner" class="muted" hidden style="margin:.1rem 0;font-size:.9rem"></p>
+
+    <div id="visitorNewFields" class="grid">
+      <label class="field">
+        <span>Owner name</span>
+        <input id="visitorOwner" name="owner_name" placeholder="e.g. Mukesh Gupta" required>
+      </label>
+      <label class="field">
+        <span>Phone <em>(optional)</em></span>
+        <input id="visitorPhone" name="phone" placeholder="10-digit number" inputmode="tel">
+      </label>
+    </div>
+
+    <label class="field">
+      <span>Vehicle number</span>
+      <input id="visitorPlate" name="plate" placeholder="e.g. HR26FM8872" required autocapitalize="characters">
+    </label>
+    <button id="visitorSubmit" type="submit" data-direction="in" class="btn btn--in">Check in</button>
     <p class="muted" style="font-size:.85rem;margin:.25rem 0 0">
-      To log a visitor OUT, search the vehicle number above &mdash; the IN/OUT buttons appear next to the result.
+      To check a visitor OUT, search the vehicle number above &mdash; the Check out button appears next to the result.
     </p>
   </form>
 </section>
@@ -42,11 +72,7 @@
   const suggest = document.getElementById('suggest');
   const visitorSection = document.getElementById('visitorSection');
   const visitorLink = document.getElementById('visitorLink');
-  const houseSearch = document.getElementById('houseSearch');
-  const houseList = document.getElementById('houseList');
-  const visitorChosen = document.getElementById('visitorChosen');
   const visitorForm = document.getElementById('visitorForm');
-  let chosenHouse = null;
   const FLOOR_LABELS = {{ floor_labels | tojson }};
   function floorLabel(f) { return f ? (FLOOR_LABELS[f] || f) + ' Floor' : ''; }
   let timer = null;
@@ -133,77 +159,114 @@
     visitorSection.scrollIntoView({behavior: 'smooth'});
   });
 
-  const visitorPlate  = document.getElementById('visitorPlate');
-  const visitorSubmit = document.getElementById('visitorSubmit');
-  const houseHelp     = document.getElementById('houseSearchHelp');
+  const visitorNumEl   = document.getElementById('visitorHouseNumber');
+  const visitorFloorEl = document.getElementById('visitorFloor');
+  const visitorOwnerEl = document.getElementById('visitorOwner');
+  const visitorPhoneEl = document.getElementById('visitorPhone');
+  const visitorPlate   = document.getElementById('visitorPlate');
+  const visitorSubmit  = document.getElementById('visitorSubmit');
+  const visitorBanner  = document.getElementById('visitorLookupBanner');
+  const visitorNewWrap = document.getElementById('visitorNewFields');
+  const visitorNumHelp = document.getElementById('visitorHouseNumberHelp');
+  const NUM_MIN = {{ house_number_min }};
+  const NUM_MAX = {{ house_number_max }};
 
-  function setVisitorLocked(locked) {
-    visitorPlate.disabled = locked;
-    visitorSubmit.disabled = locked;
-  }
-  setVisitorLocked(true);
-
-  houseSearch.addEventListener('input', () => {
-    const q = houseSearch.value.toUpperCase().trim();
-    let visibleCount = 0;
-    [...houseList.children].forEach(li => {
-      const txt = (li.dataset.number + ' ' + (li.dataset.floor || '') + ' ' + li.textContent).toUpperCase();
-      const match = txt.includes(q);
-      li.style.display = match ? '' : 'none';
-      if (match) visibleCount++;
-    });
-    // Picking via the list is the only way to get a valid house, so editing
-    // the search box invalidates any prior pick.
-    if (chosenHouse) {
-      chosenHouse = null;
-      visitorChosen.textContent = '';
-      setVisitorLocked(true);
+  function visitorCheckNumber() {
+    const v = visitorNumEl.value.trim();
+    const n = parseInt(v, 10);
+    const valid = v !== '' && /^\d+$/.test(v) && n >= NUM_MIN && n <= NUM_MAX;
+    if (v === '') {
+      visitorNumHelp.style.display = 'none';
+      visitorNumEl.setCustomValidity('');
+    } else if (!valid) {
+      visitorNumHelp.style.display = '';
+      visitorNumEl.setCustomValidity(`House number must be between ${NUM_MIN} and ${NUM_MAX}`);
+    } else {
+      visitorNumHelp.style.display = 'none';
+      visitorNumEl.setCustomValidity('');
     }
-    // Show red error when there's text in the box but nothing matches it.
-    houseHelp.style.display = (q && visibleCount === 0) ? '' : 'none';
-  });
+    return valid;
+  }
 
-  houseList.addEventListener('click', (e) => {
-    const li = e.target.closest('li');
-    if (!li) return;
-    chosenHouse = {id: li.dataset.id, label: li.textContent.trim().replace(/\s+/g, ' ')};
-    visitorChosen.innerHTML = `Visitor for: <strong>${chosenHouse.label}</strong> <button class="link" id="clearChosen">clear</button>`;
-    houseHelp.style.display = 'none';
-    setVisitorLocked(false);
-    visitorPlate.focus();
-    document.getElementById('clearChosen').addEventListener('click', () => {
-      chosenHouse = null;
-      visitorChosen.textContent = '';
-      setVisitorLocked(true);
-    });
+  function visitorSetExisting(match) {
+    visitorBanner.hidden = false;
+    const fl = FLOOR_LABELS[match.floor] || match.floor || '';
+    visitorBanner.innerHTML = `Visiting <strong>house ${match.number} (${fl} Floor)</strong>` +
+      (match.owner_name ? ` &mdash; ${match.owner_name}` : '') + '.';
+    visitorNewWrap.style.display = 'none';
+    visitorOwnerEl.required = false;
+    visitorOwnerEl.value = match.owner_name || '';
+    visitorPhoneEl.value = match.phone || '';
+  }
+
+  function visitorSetNewHouse() {
+    visitorBanner.hidden = true;
+    visitorNewWrap.style.display = '';
+    visitorOwnerEl.required = true;
+    visitorOwnerEl.value = '';
+    visitorPhoneEl.value = '';
+  }
+
+  let visitorLookupTimer = null;
+  let visitorLookupKey = '';
+  async function visitorLookup() {
+    const number = visitorNumEl.value.trim();
+    const floor = visitorFloorEl.value.trim();
+    const key = number + '|' + floor;
+    if (key === visitorLookupKey) return;
+    visitorLookupKey = key;
+    if (!number || !floor || !visitorCheckNumber()) {
+      visitorSetNewHouse();
+      return;
+    }
+    try {
+      const r = await fetch('/api/houses/lookup?number=' + encodeURIComponent(number) + '&floor=' + encodeURIComponent(floor));
+      const data = await r.json();
+      if (data.matches && data.matches.length === 1) {
+        visitorSetExisting(data.matches[0]);
+      } else {
+        visitorSetNewHouse();
+      }
+    } catch (e) {
+      visitorSetNewHouse();
+    }
+  }
+  visitorNumEl.addEventListener('input', () => {
+    visitorCheckNumber();
+    clearTimeout(visitorLookupTimer);
+    visitorLookupTimer = setTimeout(visitorLookup, 150);
   });
+  visitorFloorEl.addEventListener('change', visitorLookup);
+  visitorNumEl.addEventListener('blur', () => { visitorCheckNumber(); visitorLookup(); });
 
   visitorForm.addEventListener('submit', async (e) => {
     e.preventDefault();
-    if (!chosenHouse) {
-      flash('Please pick a house first', true);
-      houseSearch.focus();
-      return;
-    }
-    const data = Object.fromEntries(new FormData(visitorForm).entries());
-    data.direction = e.submitter.dataset.direction;
-    data.kind = 'visitor';
-    data.house_id = parseInt(chosenHouse.id, 10);
+    if (!visitorCheckNumber()) return;
+    if (!visitorFloorEl.value) return;
+
+    const data = {
+      plate: visitorPlate.value,
+      direction: e.submitter.dataset.direction,
+      kind: 'visitor',
+      house_number: visitorNumEl.value.trim(),
+      house_floor: visitorFloorEl.value,
+      owner_name: visitorOwnerEl.value.trim(),
+      phone: visitorPhoneEl.value.trim(),
+    };
     const ok = await postLog(data);
     if (ok) {
       const action = data.direction === 'in' ? 'checked in' : 'checked out';
-      // chosenHouse.label looks like "633 First Floor — Mukesh Gupta"
-      const houseNum = (chosenHouse.label || '').split(/\s/)[0];
+      const houseNum = data.house_number;
       const now = new Date();
       const hh = ((now.getHours() + 11) % 12) + 1;
       const mm = String(now.getMinutes()).padStart(2, '0');
       const ampm = now.getHours() < 12 ? 'AM' : 'PM';
       flash(`${data.plate} ${action} at house ${houseNum} · ${hh}:${mm} ${ampm}`);
       visitorForm.reset();
-      // Force the locked state back since the form was reset
-      chosenHouse = null;
-      visitorChosen.textContent = '';
-      setVisitorLocked(true);
+      visitorBanner.hidden = true;
+      visitorLookupKey = '';
+      visitorNewWrap.style.display = '';
+      visitorOwnerEl.required = true;
     }
   });
 

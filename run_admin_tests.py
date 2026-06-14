@@ -163,7 +163,8 @@ status, _, _ = post("/houses/new", form={"number": "555", "floor": "ground", "ow
 check("guard CAN create houses (residents can too)", status in (200, 302) and status not in (401, 403))
 # But guard CAN log via api/log
 status, _, _ = post("/api/log",
-    json_body={"plate": "GUARD1", "direction": "in", "kind": "visitor", "house_number": "101"})
+    json_body={"plate": "GUARD1", "direction": "in", "kind": "visitor",
+               "house_number": "101", "house_floor": "ground"})
 check("guard CAN POST /api/log", status == 200)
 # Re-login as admin for the rest of the suite
 post("/logout")

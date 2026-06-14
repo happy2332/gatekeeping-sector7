@@ -199,7 +199,7 @@ check("visitor attached to 101", re.search(r"UP14XY9999.*?101", body, re.S))
 # Visitor by house_number string (the API also accepts this)
 status, _, _ = post("/api/log", json_body={
     "plate": "MH12AA1111", "direction": "in", "kind": "visitor",
-    "house_number": "201", "visitor_name": "Pooja",
+    "house_number": "201", "house_floor": "ground", "visitor_name": "Pooja",
 })
 check("POST visitor IN by house_number string returns 200", status == 200)
 _, body, _ = get("/inside")

@@ -42,7 +42,14 @@
           <tr>
             <td data-label="Vehicle"><strong>{{ r.plate }}</strong></td>
             <td data-label="Type"><span class="badge badge--{{ r.kind }}">{{ r.kind }}</span></td>
-            <td data-label="House">{% if r.house_id %}{{ r.house_number }}{% if r.house_floor %} · {{ floor_labels.get(r.house_floor, r.house_floor) }}{% endif %}{% else %}—{% endif %}</td>
+            <td data-label="House">
+            {%- if r.house_id -%}
+              {{ r.house_number }}{% if r.house_floor %} · {{ floor_labels.get(r.house_floor, r.house_floor) }}{% endif %}
+            {%- elif r.unregistered_house -%}
+              {%- set parts = r.unregistered_house.split(' ', 1) -%}
+              {{ parts[0] }}{% if parts|length > 1 %} · {{ floor_labels.get(parts[1], parts[1]) }}{% endif %}
+            {%- else -%}—{%- endif -%}
+          </td>
             <td data-label="Owner">{{ r.house_owner or '—' }}</td>
             <td data-label="Phone" class="muted">
               {% if show_phone %}
@@ -81,7 +88,14 @@
           <td data-label="Vehicle">{{ r.plate }}</td>
           <td data-label="Status"><span class="badge badge--{{ r.direction }}">{{ r.direction }}</span></td>
           <td data-label="Type">{{ r.kind }}</td>
-          <td data-label="House">{% if r.house_id %}{{ r.house_number }}{% if r.house_floor %} · {{ floor_labels.get(r.house_floor, r.house_floor) }}{% endif %}{% else %}—{% endif %}</td>
+          <td data-label="House">
+            {%- if r.house_id -%}
+              {{ r.house_number }}{% if r.house_floor %} · {{ floor_labels.get(r.house_floor, r.house_floor) }}{% endif %}
+            {%- elif r.unregistered_house -%}
+              {%- set parts = r.unregistered_house.split(' ', 1) -%}
+              {{ parts[0] }}{% if parts|length > 1 %} · {{ floor_labels.get(parts[1], parts[1]) }}{% endif %}
+            {%- else -%}—{%- endif -%}
+          </td>
         </tr>
       {% endfor %}
     </tbody>
