@@ -221,14 +221,16 @@ def normalise_plate(plate: str) -> str:
 
 @app.route("/")
 def index():
-    """Public landing page — exact-plate search for residents."""
+    """Public landing — exact match shows a card; otherwise show partial matches."""
     db = get_db()
     q_raw = request.args.get("q", "").strip()
     q_norm = normalise_plate(q_raw)
     found = None
+    partial_matches = []
     not_found = False
+
     if q_norm:
-        # First try registered (resident) vehicles.
+        # 1) Exact match in registered (resident) vehicles.
         found = db.execute(
             """
             SELECT v.plate AS plate,
@@ -246,7 +248,7 @@ def index():
             (q_norm,),
         ).fetchone()
 
-        # Fall back to visitor plates that exist only in the movement log.
+        # 2) Exact match in visitor movements (plates not in the vehicles table).
         if not found:
             found = db.execute(
                 """
@@ -268,10 +270,57 @@ def index():
                 (q_norm, q_norm),
             ).fetchone()
 
-        not_found = found is None
+        # 3) No exact hit — show partial matches (vehicles + visitor plates).
+        if not found:
+            like = f"%{q_norm}%"
+            # Registered vehicles
+            res_rows = db.execute(
+                """
+                SELECT v.plate AS plate,
+                       h.number AS house_number, h.floor AS house_floor,
+                       h.owner_name,
+                       'resident' AS kind,
+                       (
+                         SELECT direction FROM movements
+                         WHERE UPPER(plate) = UPPER(v.plate)
+                         ORDER BY id DESC LIMIT 1
+                       ) AS last_direction
+                FROM vehicles v JOIN houses h ON h.id = v.house_id
+                WHERE UPPER(v.plate) LIKE ?
+                ORDER BY v.plate
+                LIMIT 25
+                """,
+                (like,),
+            ).fetchall()
+            seen = {r["plate"] for r in res_rows}
+            # Visitor plates from movement log (latest row per plate, not already in vehicles).
+            vis_rows = db.execute(
+                """
+                SELECT m.plate AS plate,
+                       h.number AS house_number, h.floor AS house_floor,
+                       h.owner_name,
+                       'visitor' AS kind,
+                       m.direction AS last_direction
+                FROM movements m
+                LEFT JOIN houses h ON h.id = m.house_id
+                WHERE m.id IN (SELECT MAX(id) FROM movements GROUP BY plate)
+                  AND UPPER(m.plate) LIKE ?
+                ORDER BY m.plate
+                LIMIT 25
+                """,
+                (like,),
+            ).fetchall()
+            partial_matches = list(res_rows)
+            for r in vis_rows:
+                if r["plate"] not in seen:
+                    partial_matches.append(r)
+                    seen.add(r["plate"])
+            partial_matches.sort(key=lambda r: r["plate"])
+            not_found = not partial_matches
+
     return render_template(
         "search_landing.html",
-        q=q_raw, found=found, not_found=not_found,
+        q=q_raw, found=found, partial_matches=partial_matches, not_found=not_found,
     )
 
 

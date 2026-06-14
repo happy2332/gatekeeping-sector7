@@ -46,6 +46,34 @@
         </dd>
       </dl>
     </div>
+  {% elif partial_matches %}
+    <p class="muted" style="margin:.6rem 0 .4rem">
+      No exact match for "<strong>{{ q }}</strong>". {{ partial_matches|length }} partial match{{ '' if partial_matches|length == 1 else 'es' }}:
+    </p>
+    <div class="card" style="margin-top:.4rem;padding:.4rem .6rem">
+      <ul style="list-style:none;padding:0;margin:0">
+        {% for r in partial_matches %}
+          {% set inside = r.last_direction == 'in' %}
+          <li style="padding:.55rem 0;border-bottom:1px solid var(--line)">
+            <a href="{{ url_for('index') }}?q={{ r.plate }}" style="text-decoration:none;color:inherit;display:block">
+              <strong>{{ r.plate }}</strong>
+              <span class="badge badge--{{ r.kind }}" style="font-size:.7rem">{{ r.kind }}</span>
+              <span class="badge {{ 'badge--in' if inside else 'badge--out' }}" style="font-size:.7rem">
+                {{ 'INSIDE' if inside else 'OUTSIDE' }}
+              </span>
+              <div class="muted" style="font-size:.85rem;margin-top:.15rem">
+                {% if r.house_number %}
+                  {{ r.house_number }}{% if r.house_floor %} · {{ floor_labels.get(r.house_floor, r.house_floor) }} Floor{% endif %}
+                  {% if r.owner_name %} · {{ r.owner_name }}{% endif %}
+                {% else %}
+                  <em>no house on record</em>
+                {% endif %}
+              </div>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
   {% elif not_found %}
     <div class="card" style="margin-top:.8rem;background:#fef2f2;border:1px solid #fecaca">
       <p style="margin:0;color:#991b1b">

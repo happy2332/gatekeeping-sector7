@@ -30,7 +30,7 @@
 
   <form id="visitorForm" class="grid">
     <input id="visitorPlate" name="plate" placeholder="Vehicle number" required autocapitalize="characters" disabled>
-    <button id="visitorSubmit" type="submit" data-direction="in" class="btn btn--in" disabled>Log IN</button>
+    <button id="visitorSubmit" type="submit" data-direction="in" class="btn btn--in" disabled>Check in</button>
     <p class="muted" style="font-size:.85rem;margin:.25rem 0 0">
       To log a visitor OUT, search the vehicle number above &mdash; the IN/OUT buttons appear next to the result.
     </p>
@@ -85,8 +85,8 @@
             <div class="muted" style="font-size:.85rem">${houseText}</div>
           </div>
           <div class="row">
-            <button class="btn btn--in"  data-action="log" data-plate="${d.plate}" data-house-id="${d.house_id || ''}" data-kind="${d.kind}" data-direction="in"  ${d.currently_inside ? 'disabled' : ''}>IN</button>
-            <button class="btn btn--out" data-action="log" data-plate="${d.plate}" data-house-id="${d.house_id || ''}" data-kind="${d.kind}" data-direction="out" ${d.currently_inside ? '' : 'disabled'}>OUT</button>
+            <button class="btn btn--in"  data-action="log" data-plate="${d.plate}" data-house-id="${d.house_id || ''}" data-kind="${d.kind}" data-direction="in"  ${d.currently_inside ? 'disabled' : ''}>Check in</button>
+            <button class="btn btn--out" data-action="log" data-plate="${d.plate}" data-house-id="${d.house_id || ''}" data-kind="${d.kind}" data-direction="out" ${d.currently_inside ? '' : 'disabled'}>Check out</button>
           </div>
         </div>
       </li>
@@ -107,7 +107,17 @@
     if (houseId) payload.house_id = houseId;
     const ok = await postLog(payload);
     if (ok) {
-      flash(`${btn.dataset.plate} logged ${btn.dataset.direction.toUpperCase()}`);
+      // Build a confirmation that names plate, house, action and the time.
+      const li = btn.closest('li');
+      const houseEl = li ? li.querySelector('.muted') : null;
+      const houseText = houseEl ? houseEl.textContent.trim().split('·')[0].trim() : '';
+      const action = btn.dataset.direction === 'in' ? 'checked in' : 'checked out';
+      const now = new Date();
+      const hh = ((now.getHours() + 11) % 12) + 1;
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const ampm = now.getHours() < 12 ? 'AM' : 'PM';
+      const where = houseText ? ` at house ${houseText}` : '';
+      flash(`${btn.dataset.plate} ${action}${where} · ${hh}:${mm} ${ampm}`);
       search.value = '';
       suggest.hidden = true;
       search.focus();
@@ -181,8 +191,19 @@
     data.house_id = parseInt(chosenHouse.id, 10);
     const ok = await postLog(data);
     if (ok) {
-      flash(`Visitor ${data.direction.toUpperCase()} logged for ${data.plate}`);
+      const action = data.direction === 'in' ? 'checked in' : 'checked out';
+      // chosenHouse.label looks like "633 First Floor — Mukesh Gupta"
+      const houseNum = (chosenHouse.label || '').split(/\s/)[0];
+      const now = new Date();
+      const hh = ((now.getHours() + 11) % 12) + 1;
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const ampm = now.getHours() < 12 ? 'AM' : 'PM';
+      flash(`${data.plate} ${action} at house ${houseNum} · ${hh}:${mm} ${ampm}`);
       visitorForm.reset();
+      // Force the locked state back since the form was reset
+      chosenHouse = null;
+      visitorChosen.textContent = '';
+      setVisitorLocked(true);
     }
   });
 
@@ -212,7 +233,7 @@
     el.className = 'toast' + (bad ? ' toast--bad' : '');
     el.textContent = msg;
     document.body.appendChild(el);
-    setTimeout(() => el.remove(), 2200);
+    setTimeout(() => el.remove(), bad ? 3000 : 4000);
   }
 </script>
 {% endblock %}
